@@ -1,0 +1,3683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Flowchart Canvas</title>
+    <!-- The application is 100% self-contained, requiring no external web access. -->
+    <style>
+        /* KPMG Color Palette */
+        :root {
+            --kpmg-blue: #00338D;
+            --cobalt: #1E49E2;
+            --dark-blue: #0C233C;
+            --light-blue: #ACEAFF;
+            --sky-blue: #76D2FF;
+            --pacific-blue: #00B8F5;
+            --purple: #7213EA;
+            --pink: #FD349C;
+        }
+        
+        /* Set font to Inter and light background */
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); /* Light blue gradient */
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+        /* Style for the main header text */
+        .header-container {
+            padding: 1.5rem;
+            text-align: center;
+            background: linear-gradient(90deg, var(--kpmg-blue) 0%, var(--cobalt) 100%);
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .header-title {
+            font-size: 1.875rem;
+            font-weight: 800;
+            color: #ffffff;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        .header-subtitle {
+            color: var(--light-blue);
+            margin-top: 0.25rem;
+            min-height: 1.5rem;
+        }
+
+        /* Control Panel Styling */
+        #toolbar {
+            text-align: center;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        #control-panel {
+            text-align: center;
+            margin-top: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .control-button {
+            padding: 0.75rem 1.5rem;
+            margin: 0 0.5rem;
+            border-radius: 9999px; /* Fully rounded */
+            font-weight: 600;
+            cursor: pointer;
+            border: 2px solid;
+            transition: background-color 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+            white-space: nowrap; /* Prevent wrapping on small screens */
+        }
+        .toolbar-button {
+            padding: 0.5rem 1rem;
+            margin: 0 0.25rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid;
+            transition: background-color 0.2s, box-shadow 0.2s;
+            box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+            white-space: nowrap;
+        }
+        .process-button {
+            background-color: var(--kpmg-blue);
+            color: #ffffff;
+            border-color: var(--kpmg-blue);
+        }
+        .process-button:hover {
+            background-color: var(--cobalt);
+            border-color: var(--cobalt);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px -2px rgba(0, 51, 141, 0.3);
+        }
+        .decision-button {
+            background-color: #ffffff;
+            color: var(--kpmg-blue);
+            border-color: var(--kpmg-blue);
+        }
+        .decision-button:hover {
+            background-color: var(--light-blue);
+            border-color: var(--cobalt);
+        }
+        .toolbar-primary {
+            background-color: var(--pacific-blue);
+            color: #ffffff;
+            border-color: var(--pacific-blue);
+        }
+        .toolbar-primary:hover {
+            background-color: var(--sky-blue);
+            border-color: var(--sky-blue);
+        }
+        .toolbar-danger {
+            background-color: var(--pink);
+            color: #ffffff;
+            border-color: var(--pink);
+        }
+        .toolbar-danger:hover {
+            background-color: #e91e8c;
+        }
+        .connect-active {
+             background-color: var(--dark-blue) !important;
+             color: #ffffff !important;
+             border-color: var(--dark-blue) !important;
+        }
+
+        /* Help Modal Styling */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        .modal-content {
+            background-color: #ffffff;
+            margin: 5% auto;
+            padding: 2rem;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 25px -5px rgba(0, 51, 141, 0.3);
+            border-top: 4px solid var(--kpmg-blue);
+        }
+        .modal-close {
+            color: var(--pacific-blue);
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .modal-close:hover {
+            color: var(--pink);
+        }
+        .shortcut-list {
+            list-style: none;
+            padding: 0;
+        }
+        .shortcut-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--light-blue);
+        }
+        .shortcut-key {
+            background-color: var(--light-blue);
+            color: var(--kpmg-blue);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-family: monospace;
+            font-weight: 600;
+        }
+
+        /* Export Modal Styling */
+        .export-modal-content {
+            background: white;
+            margin: 10% auto;
+            padding: 2rem;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .export-input {
+            width: 100%;
+            padding: 0.75rem;
+            margin: 1rem 0;
+            border: 2px solid var(--kpmg-blue);
+            border-radius: 6px;
+            font-size: 1rem;
+            font-family: Inter, sans-serif;
+            box-sizing: border-box;
+        }
+        .export-input:focus {
+            outline: none;
+            border-color: var(--kpmg-cobalt);
+            box-shadow: 0 0 0 3px rgba(30, 73, 226, 0.1);
+        }
+        .export-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        .export-btn {
+            flex: 1;
+            padding: 0.75rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .export-btn-primary {
+            background: var(--kpmg-blue);
+            color: white;
+        }
+        .export-btn-primary:hover {
+            background: var(--kpmg-cobalt);
+        }
+        .export-btn-secondary {
+            background: #e5e7eb;
+            color: #374151;
+        }
+        .export-btn-secondary:hover {
+            background: #d1d5db;
+        }
+        .file-info {
+            color: #6b7280;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+
+        /* Style the canvas container */
+        #canvas-container {
+            width: 90%;
+            max-width: 1000px;
+            margin: 20px auto;
+            position: relative; /* CRITICAL for positioning the editor input correctly */
+            /* Box Shadow for depth */
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            background-color: #ffffff;
+            cursor: default; /* Default cursor for non-dragging areas */
+        }
+
+        /* Styling for the in-place text editor */
+        .node-editor-input {
+            position: absolute;
+            z-index: 10;
+            border: 2px solid var(--cobalt);
+            border-radius: 10px;
+            text-align: center;
+            padding: 8px;
+            margin: 0;
+            font-size: 16px;
+            font-family: 'Inter', sans-serif;
+            box-sizing: border-box;
+            outline: none;
+            box-shadow: 0 4px 12px rgba(30, 73, 226, 0.3);
+            resize: none;
+            overflow: hidden;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-container">
+        <h1 class="header-title">Interactive Flowchart v1.1</h1>
+        <p id="subtitle" class="header-subtitle" data-original-text="Drag blocks to move, use handles to resize, double-click to edit, or drag canvas to pan.">
+            Drag blocks to move, use handles to resize, double-click to edit, or drag canvas to pan.
+        </p>
+    </div>
+
+    <!-- Toolbar (Upper row - smaller functional buttons) -->
+    <div id="toolbar">
+        <button id="undoBtn" class="toolbar-button toolbar-primary">↶ Undo</button>
+        <button id="redoBtn" class="toolbar-button toolbar-primary">↷ Redo</button>
+        <button id="exportBtn" class="toolbar-button toolbar-primary">💾 Export</button>
+        <button id="importBtn" class="toolbar-button toolbar-primary">📂 Import</button>
+        <button id="importJsonBtn" class="toolbar-button toolbar-primary" title="Import from JSON text">📋 Import JSON</button>
+        <button id="clearBtn" class="toolbar-button toolbar-danger">🗑️ Clear Canvas</button>
+        
+        <!-- Alignment Toolbar Section -->
+        <div style="display: inline-block; margin: 0 10px; border-left: 2px solid #d1d5db; height: 30px;"></div>
+        <button id="alignLeftBtn" class="toolbar-button toolbar-primary" title="Align Left (Ctrl+Shift+L)" disabled>⬅️ Left</button>
+        <button id="alignCenterHBtn" class="toolbar-button toolbar-primary" title="Center Horizontally" disabled>↔️ Center H</button>
+        <button id="alignRightBtn" class="toolbar-button toolbar-primary" title="Align Right (Ctrl+Shift+R)" disabled>➡️ Right</button>
+        <button id="alignTopBtn" class="toolbar-button toolbar-primary" title="Align Top (Ctrl+Shift+T)" disabled>⬆️ Top</button>
+        <button id="alignCenterVBtn" class="toolbar-button toolbar-primary" title="Center Vertically" disabled>↕️ Center V</button>
+        <button id="alignBottomBtn" class="toolbar-button toolbar-primary" title="Align Bottom (Ctrl+Shift+B)" disabled>⬇️ Bottom</button>
+        <button id="distributeHBtn" class="toolbar-button toolbar-primary" title="Distribute Horizontally" disabled>↔️ Distribute H</button>
+        <button id="distributeVBtn" class="toolbar-button toolbar-primary" title="Distribute Vertically" disabled>↕️ Distribute V</button>
+        <button id="autoLayoutBtn" class="toolbar-button toolbar-primary" title="Auto Layout (Hierarchical) - Top-down flow arrangement" disabled>🎯 Auto Layout</button>
+        <button id="toggleLayoutBtn" class="toolbar-button toolbar-secondary" title="Toggle between Hierarchical and Force-Directed layout modes">🔄 Layout Mode</button>
+        <div style="display: inline-block; margin: 0 10px; border-left: 2px solid #d1d5db; height: 30px;"></div>
+        
+        <!-- Grouping Toolbar Section -->
+        <button id="createGroupBtn" class="toolbar-button toolbar-primary" title="Create Group from Selected (Ctrl+G)" disabled>📦 Group</button>
+        <button id="ungroupBtn" class="toolbar-button toolbar-primary" title="Ungroup Selected Group (Ctrl+Shift+G)" disabled>📂 Ungroup</button>
+        <button id="selectGroupBtn" class="toolbar-button toolbar-primary" title="Select Group" disabled>🎯 Select Group</button>
+        <div style="display: inline-block; margin: 0 10px; border-left: 2px solid #d1d5db; height: 30px;"></div>
+        
+        <button id="helpBtn" class="toolbar-button toolbar-primary">❓ Help</button>
+        <input type="file" id="importFile" accept=".json" style="display: none;">
+    </div>
+
+    <!-- Control Panel (Lower row - main creation buttons) -->
+    <div id="control-panel">
+        <button id="addProcessBtn" class="control-button process-button" title="Standard process step">📦 Process</button>
+        <button id="addDecisionBtn" class="control-button decision-button" title="Decision/branching point">💎 Decision</button>
+        <button id="addTerminatorBtn" class="control-button process-button" title="Start or End point">🏁 Start/End</button>
+        <button id="addIOBtn" class="control-button process-button" title="Input or Output operation">📥 Input/Output</button>
+        <button id="addDocumentBtn" class="control-button process-button" title="Document or report">📄 Document</button>
+        <button id="addDatabaseBtn" class="control-button process-button" title="Database storage">🗄️ Database</button>
+        <button id="addSubprocessBtn" class="control-button process-button" title="Predefined subprocess">⚙️ Subprocess</button>
+        <button id="addManualBtn" class="control-button process-button" title="Manual operation">✋ Manual</button>
+        <button id="connectModeBtn" class="control-button decision-button" title="Draw connections between blocks">🔗 Connect</button>
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="flowchartCanvas"></canvas>
+        <!-- Hidden textarea for editing node/label text, positioned over the canvas -->
+        <textarea id="node-editor" class="node-editor-input" style="display:none; position:absolute; z-index:10;"></textarea>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" id="closeHelp">&times;</span>
+            <h2 style="color: #1f2937; margin-top: 0;">Keyboard Shortcuts & Tips</h2>
+            <ul class="shortcut-list">
+                <li class="shortcut-item">
+                    <span>Pan canvas</span>
+                    <span class="shortcut-key">Click & Drag</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Zoom in/out</span>
+                    <span class="shortcut-key">Mouse Wheel</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Move block</span>
+                    <span class="shortcut-key">Drag Block</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Resize block</span>
+                    <span class="shortcut-key">Drag Handles</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Edit text</span>
+                    <span class="shortcut-key">Double-Click</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>New line in text</span>
+                    <span class="shortcut-key">Enter</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Save text edits</span>
+                    <span class="shortcut-key">Ctrl+Enter / Shift+Enter</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Delete selected</span>
+                    <span class="shortcut-key">Delete / Backspace</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Undo</span>
+                    <span class="shortcut-key">Ctrl+Z</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Redo</span>
+                    <span class="shortcut-key">Ctrl+Y / Ctrl+Shift+Z</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Save (export)</span>
+                    <span class="shortcut-key">Ctrl+S</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Toggle snap to grid</span>
+                    <span class="shortcut-key">G</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Copy block</span>
+                    <span class="shortcut-key">Ctrl+C</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Paste block</span>
+                    <span class="shortcut-key">Ctrl+V</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Duplicate block</span>
+                    <span class="shortcut-key">Ctrl+D</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Multi-select blocks</span>
+                    <span class="shortcut-key">Ctrl+Click</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Align left</span>
+                    <span class="shortcut-key">Ctrl+Shift+L / ←</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Align right</span>
+                    <span class="shortcut-key">Ctrl+Shift+R / →</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Align top</span>
+                    <span class="shortcut-key">Ctrl+Shift+T / ↑</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Align bottom</span>
+                    <span class="shortcut-key">Ctrl+Shift+B / ↓</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Center horizontally</span>
+                    <span class="shortcut-key">Ctrl+Shift+H</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Center vertically</span>
+                    <span class="shortcut-key">Ctrl+Shift+V</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Create group</span>
+                    <span class="shortcut-key">Ctrl+G</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Rename group</span>
+                    <span class="shortcut-key">Double-Click Label</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Ungroup</span>
+                    <span class="shortcut-key">Ctrl+Shift+G</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Select group members</span>
+                    <span class="shortcut-key">Alt+Click</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Auto layout</span>
+                    <span class="shortcut-key">Auto Layout Button</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Toggle layout mode</span>
+                    <span class="shortcut-key">Layout Mode Button</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Clear canvas</span>
+                    <span class="shortcut-key">Clear Canvas Button</span>
+                </li>
+            </ul>
+            <p style="margin-top: 1.5rem; color: #6b7280; font-size: 0.9rem;">
+                💡 <strong>Tip:</strong> Your work is automatically saved to browser storage and restored when you reload the page.
+            </p>
+            <p style="margin-top: 0.75rem; color: #6b7280; font-size: 0.9rem;">
+                ✨ <strong>Alignment:</strong> Multi-select blocks (Ctrl+Click) to enable alignment toolbar buttons for precise layout control.
+            </p>
+            <p style="margin-top: 0.75rem; color: #6b7280; font-size: 0.9rem;">
+                📦 <strong>Grouping:</strong> Select multiple blocks and press Ctrl+G to create a persistent group. Groups move together as one unit. Double-click the group name to rename it.
+            </p>
+            <p style="margin-top: 0.75rem; color: #6b7280; font-size: 0.9rem;">
+                🎯 <strong>Auto Layout:</strong> Two modes available - <strong>Hierarchical</strong> (BFS-based top-down flow) and <strong>Force-Directed</strong> (physics simulation for natural positioning). Toggle between modes using the "Layout Mode" button.
+            </p>
+        </div>
+    </div>
+
+    <!-- Export Modal -->
+    <div id="exportModal" class="modal">
+        <div class="export-modal-content">
+            <h2 style="color: #1f2937; margin-top: 0;">💾 Export Flowchart</h2>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; color: #6b7280; margin-bottom: 0.5rem; font-weight: 600;">
+                    📁 Save Location:
+                </label>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <button id="chooseFolderBtn" class="export-btn export-btn-secondary" style="flex: 0 0 auto; padding: 0.5rem 1rem;">
+                        📂 Choose Folder
+                    </button>
+                    <span id="selectedFolderDisplay" style="color: #6b7280; font-size: 0.875rem; font-style: italic;">
+                        Browser default (Downloads folder)
+                    </span>
+                </div>
+            </div>
+            
+            <p style="color: #6b7280; margin-bottom: 0.5rem;">Enter a filename for your flowchart:</p>
+            
+            <input 
+                type="text" 
+                id="exportFilename" 
+                class="export-input" 
+                placeholder="my-flowchart"
+                value=""
+            />
+            <p class="file-info">
+                📄 File will be saved as: <strong><span id="exportFilenamePreview">my-flowchart.json</span></strong>
+            </p>
+            
+            <div class="export-buttons">
+                <button id="exportCancelBtn" class="export-btn export-btn-secondary">Cancel</button>
+                <button id="exportConfirmBtn" class="export-btn export-btn-primary">💾 Export</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JSON Import Modal -->
+    <div id="jsonImportModal" class="modal">
+        <div class="export-modal-content" style="max-width: 700px;">
+            <h2 style="color: #1f2937; margin-top: 0;">📋 Import Flowchart from JSON</h2>
+            
+            <p style="color: #6b7280; margin-bottom: 1rem;">
+                Paste your flowchart JSON below. This can be generated by an AI agent or exported from this tool.
+            </p>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; color: #6b7280; margin-bottom: 0.5rem; font-weight: 600;">
+                    JSON Content:
+                </label>
+                <textarea 
+                    id="jsonImportTextarea" 
+                    style="width: 100%; height: 300px; padding: 0.75rem; border: 2px solid #d1d5db; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 0.875rem; resize: vertical;"
+                    placeholder='{
+  "nodes": [
+    {
+      "id": 0,
+      "x": 400,
+      "y": 100,
+      "w": 160,
+      "h": 60,
+      "type": "process",
+      "text": "Start Process"
+    }
+  ],
+  "connections": [
+    {
+      "from": 0,
+      "to": 1,
+      "label": ""
+    }
+  ]
+}'
+                ></textarea>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: flex; align-items: center; color: #6b7280; font-size: 0.875rem;">
+                    <input type="checkbox" id="jsonImportClearFirst" style="margin-right: 0.5rem;">
+                    Clear existing canvas before importing
+                </label>
+            </div>
+            
+            <div class="export-buttons">
+                <button id="jsonImportCancelBtn" class="export-btn export-btn-secondary">Cancel</button>
+                <button id="jsonImportConfirmBtn" class="export-btn export-btn-primary">📥 Import</button>
+            </div>
+            
+            <div style="margin-top: 1rem; padding: 0.75rem; background: #f3f4f6; border-radius: 6px; font-size: 0.8rem; color: #6b7280;">
+                <strong>💡 Tip:</strong> AI agents can generate flowcharts using the schema in <code>AI_AGENT_PROMPT.md</code>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // CONFIGURATION - All Constants and Default Settings
+        // ============================================================
+        
+        const CONFIG = {
+            // --- Canvas & Viewport Settings ---
+            CANVAS_HEIGHT: 750,                    // Fixed canvas height in pixels
+            
+            // --- Zoom Settings ---
+            ZOOM_FACTOR: 1.1,                      // Zoom increment multiplier
+            MIN_SCALE: 0.3,                        // Minimum zoom level (30%)
+            MAX_SCALE: 3.0,                        // Maximum zoom level (300%)
+            DEFAULT_SCALE: 1.0,                    // Initial zoom level
+            
+            // --- Grid Settings ---
+            GRID_SIZE: 20,                         // Grid spacing in world units
+            SNAP_TO_GRID_DEFAULT: false,           // Snap to grid enabled by default
+            
+            // --- Node Size Defaults ---
+            DEFAULT_PROCESS_WIDTH: 160,            // Default width for process blocks
+            DEFAULT_PROCESS_HEIGHT: 60,            // Default height for process blocks
+            DEFAULT_DECISION_WIDTH: 100,           // Default width for decision blocks
+            DEFAULT_DECISION_HEIGHT: 100,          // Default height for decision blocks
+            DEFAULT_TERMINATOR_WIDTH: 140,         // Default width for start/end blocks
+            DEFAULT_TERMINATOR_HEIGHT: 60,         // Default height for start/end blocks
+            DEFAULT_IO_WIDTH: 160,                 // Default width for input/output blocks
+            DEFAULT_IO_HEIGHT: 60,                 // Default height for input/output blocks
+            DEFAULT_DOCUMENT_WIDTH: 160,           // Default width for document blocks
+            DEFAULT_DOCUMENT_HEIGHT: 80,           // Default height for document blocks
+            DEFAULT_DATABASE_WIDTH: 140,           // Default width for database blocks
+            DEFAULT_DATABASE_HEIGHT: 100,          // Default height for database blocks
+            DEFAULT_SUBPROCESS_WIDTH: 160,         // Default width for subprocess blocks
+            DEFAULT_SUBPROCESS_HEIGHT: 60,         // Default height for subprocess blocks
+            DEFAULT_MANUAL_WIDTH: 160,             // Default width for manual operation blocks
+            DEFAULT_MANUAL_HEIGHT: 70,             // Default height for manual operation blocks
+            MIN_NODE_WIDTH: 60,                    // Minimum width for any block
+            MIN_NODE_HEIGHT: 30,                   // Minimum height for any block
+            
+            // --- Font Settings (World Units) ---
+            WORLD_LABEL_FONT_SIZE: 16,             // Font size for connection labels
+            WORLD_MIN_NODE_FONT_SIZE: 12,          // Minimum font size for node text
+            WORLD_MAX_NODE_FONT_SIZE: 20,          // Maximum font size for node text
+            
+            // --- UI Element Sizes ---
+            RESIZE_HANDLE_SIZE: 8,                 // Size of resize handles in screen pixels
+            LINE_WIDTH: 3,                         // Default line width for connections
+            ARROWHEAD_SIZE: 10,                    // Size of arrowheads
+            
+            // --- Interaction Thresholds ---
+            DRAG_THRESHOLD: 3,                     // Pixels to move before starting drag
+            CLICK_THRESHOLD_LINE: 10,              // World units threshold for clicking connection lines
+            CLICK_THRESHOLD_LABEL: 15,             // World units threshold for clicking labels
+            
+            // --- Copy/Paste Settings ---
+            PASTE_OFFSET: 20,                      // Offset for pasted nodes to avoid overlap
+            
+            // --- History Settings ---
+            MAX_HISTORY: 50,                       // Maximum undo/redo states to keep
+            
+            // --- Message Display ---
+            MESSAGE_DURATION: 3000,                // Duration to show messages (milliseconds)
+            
+            // --- Auto-save ---
+            AUTOSAVE_KEY: 'flowchart_autosave',    // localStorage key for auto-save
+        };
+
+        // ============================================================
+        // DOM ELEMENT REFERENCES
+        // ============================================================
+        
+        // Global environment variables (kept for environment compatibility)
+        if (typeof setLogLevel !== 'undefined') setLogLevel('Debug');
+        
+        const canvas = document.getElementById('flowchartCanvas');
+        const ctx = canvas.getContext('2d');
+        const nodeEditor = document.getElementById('node-editor');
+        const addProcessBtn = document.getElementById('addProcessBtn');
+        const addDecisionBtn = document.getElementById('addDecisionBtn');
+        const addTerminatorBtn = document.getElementById('addTerminatorBtn');
+        const addIOBtn = document.getElementById('addIOBtn');
+        const addDocumentBtn = document.getElementById('addDocumentBtn');
+        const addDatabaseBtn = document.getElementById('addDatabaseBtn');
+        const addSubprocessBtn = document.getElementById('addSubprocessBtn');
+        const addManualBtn = document.getElementById('addManualBtn');
+        const connectModeBtn = document.getElementById('connectModeBtn');
+        const undoBtn = document.getElementById('undoBtn');
+        const redoBtn = document.getElementById('redoBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const importBtn = document.getElementById('importBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const alignLeftBtn = document.getElementById('alignLeftBtn');
+        const alignCenterHBtn = document.getElementById('alignCenterHBtn');
+        const alignRightBtn = document.getElementById('alignRightBtn');
+        const alignTopBtn = document.getElementById('alignTopBtn');
+        const alignCenterVBtn = document.getElementById('alignCenterVBtn');
+        const alignBottomBtn = document.getElementById('alignBottomBtn');
+        const distributeHBtn = document.getElementById('distributeHBtn');
+        const distributeVBtn = document.getElementById('distributeVBtn');
+        const autoLayoutBtn = document.getElementById('autoLayoutBtn');
+        const toggleLayoutBtn = document.getElementById('toggleLayoutBtn');
+        const createGroupBtn = document.getElementById('createGroupBtn');
+        const ungroupBtn = document.getElementById('ungroupBtn');
+        const selectGroupBtn = document.getElementById('selectGroupBtn');
+        const importFile = document.getElementById('importFile');
+        const helpBtn = document.getElementById('helpBtn');
+        const helpModal = document.getElementById('helpModal');
+        const closeHelp = document.getElementById('closeHelp');
+        const exportModal = document.getElementById('exportModal');
+        const exportFilename = document.getElementById('exportFilename');
+        const exportFilenamePreview = document.getElementById('exportFilenamePreview');
+        const exportConfirmBtn = document.getElementById('exportConfirmBtn');
+        const exportCancelBtn = document.getElementById('exportCancelBtn');
+        const chooseFolderBtn = document.getElementById('chooseFolderBtn');
+        const selectedFolderDisplay = document.getElementById('selectedFolderDisplay');
+        const jsonImportModal = document.getElementById('jsonImportModal');
+        const jsonImportBtn = document.getElementById('importJsonBtn');
+        const jsonImportTextarea = document.getElementById('jsonImportTextarea');
+        const jsonImportClearFirst = document.getElementById('jsonImportClearFirst');
+        const jsonImportConfirmBtn = document.getElementById('jsonImportConfirmBtn');
+        const jsonImportCancelBtn = document.getElementById('jsonImportCancelBtn');
+        const subtitle = document.getElementById('subtitle');
+
+        // ============================================================
+        // STATE VARIABLES
+        // ============================================================
+        
+        // --- Selection & Editing State ---
+        let selectedNode = null;                   // Node currently highlighted/selected
+        let selectedNodes = [];                    // Array of selected nodes (for multi-select)
+        let selectedConnection = null;             // Connection object currently highlighted/selected
+        let editingNode = null;                    // Node whose text is being edited
+        let editingLabel = null;                   // Connection object whose label is being edited
+        let hoveredConnection = null;              // Connection currently being hovered over
+        
+        // --- Grouping State ---
+        let groups = [];                           // Array of groups: [{id, name, nodeIds, color}]
+        let nextGroupId = 0;                       // Counter for group IDs
+        let selectedGroup = null;                  // Currently selected group
+        let editingGroupName = null;               // Group whose name is being edited
+        
+        // --- Node Dragging State ---
+        let isDragging = false;                    // Flag for dragging a node
+        let dragOffsetX = 0;                       // Offset for node drag start (in world coordinates)
+        let dragOffsetY = 0;
+
+        // --- Node Resizing State ---
+        let isResizing = false;                    // Flag for resizing a node
+        let resizeHandle = null;                   // Which handle is being dragged ('nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w')
+        let resizeStartNode = null;                // Node state at start of resize
+        let resizeStartMouse = { x: 0, y: 0 };     // Mouse position at start of resize
+
+        // --- Canvas Panning State ---
+        let isCanvasDragging = false;              // Flag for dragging the whole canvas
+        let canvasOffsetX = 0;                     // Current horizontal pan offset (in world units)
+        let canvasOffsetY = 0;                     // Current vertical pan offset (in world units)
+        let dragStartX = 0;                        // Mouse X position when canvas drag started (in screen units)
+        let dragStartY = 0;                        // Mouse Y position when canvas drag started (in screen units)
+        
+        // --- Zoom State ---
+        let scale = CONFIG.DEFAULT_SCALE;          // Current zoom level
+
+        // --- Connection Mode State ---
+        let isConnecting = false;                  // Flag for connection mode
+        let connectionStartNode = null;            // Node where connection started
+        let currentMousePos = { x: 0, y: 0 };      // Current mouse position (in screen units)
+
+        // --- Feature Toggles ---
+        let snapToGrid = CONFIG.SNAP_TO_GRID_DEFAULT; // Snap to grid feature
+
+        // --- History State ---
+        let history = [];                          // Undo/redo state history
+        let historyIndex = -1;                     // Current position in history
+
+        // --- Copy/Paste State ---
+        let copiedNode = null;                     // Stores the copied node data
+
+        // --- File System State ---
+        let savedDirectoryHandle = null;           // Stores the user-selected directory handle
+
+        // ============================================================
+        // DATA STRUCTURES - Nodes and Connections
+        // ============================================================
+        
+        // Node structure: { id, x, y, w, h, type, text }
+        let nodes = [
+            { id: 0, x: 100, y: 50, w: CONFIG.DEFAULT_PROCESS_WIDTH, h: CONFIG.DEFAULT_PROCESS_HEIGHT, type: 'process', text: 'Start Process' },
+            { id: 1, x: 100, y: 180, w: CONFIG.DEFAULT_PROCESS_WIDTH, h: CONFIG.DEFAULT_PROCESS_HEIGHT, type: 'process', text: 'Gather Data' },
+            { id: 2, x: 130, y: 320, w: CONFIG.DEFAULT_DECISION_WIDTH, h: CONFIG.DEFAULT_DECISION_HEIGHT, type: 'decision', text: 'Data OK?' },
+            { id: 3, x: 50, y: 500, w: CONFIG.DEFAULT_PROCESS_WIDTH, h: CONFIG.DEFAULT_PROCESS_HEIGHT, type: 'process', text: 'Refine Data' },
+            { id: 4, x: 250, y: 500, w: CONFIG.DEFAULT_PROCESS_WIDTH, h: CONFIG.DEFAULT_PROCESS_HEIGHT, type: 'process', text: 'Analyze Result' },
+            { id: 5, x: 250, y: 650, w: CONFIG.DEFAULT_PROCESS_WIDTH, h: CONFIG.DEFAULT_PROCESS_HEIGHT, type: 'process', text: 'End' }
+        ];
+
+        // Connection structure: { from: nodeId, to: nodeId, label: 'text' }
+        // IMPORTANT: Must use 'let' not 'const' so we can reassign during import/undo/redo
+        let connections = [
+            { from: 0, to: 1 },
+            { from: 1, to: 2 },
+            { from: 2, to: 3, label: 'No' },
+            { from: 3, to: 1, label: 'Loop' }, 
+            { from: 2, to: 4, label: 'Yes' },
+            { from: 4, to: 5 }
+        ];
+
+        // Unique ID counter starts after initial nodes
+        let nextNodeId = 6; 
+        function getNextNodeId() {
+            return nextNodeId++;
+        }
+
+        /**
+         * Utility function to display temporary messages in the subtitle area.
+         */
+        function messageBox(message) {
+            const originalText = subtitle.getAttribute('data-original-text');
+            subtitle.textContent = message;
+            
+            // Revert after configured duration
+            setTimeout(() => {
+                if (subtitle.textContent === message) {
+                    subtitle.textContent = originalText;
+                }
+            }, CONFIG.MESSAGE_DURATION);
+        }
+
+        // --- Undo/Redo System ---
+        
+        /**
+         * Captures the current state for undo/redo functionality.
+         */
+        function captureState() {
+            const state = {
+                nodes: JSON.parse(JSON.stringify(nodes)),
+                connections: JSON.parse(JSON.stringify(connections)),
+                groups: JSON.parse(JSON.stringify(groups)),
+                nextNodeId: nextNodeId,
+                nextGroupId: nextGroupId
+            };
+            
+            // Remove any future states if we're not at the end
+            if (historyIndex < history.length - 1) {
+                history = history.slice(0, historyIndex + 1);
+            }
+            
+            history.push(state);
+            
+            // Limit history size
+            if (history.length > CONFIG.MAX_HISTORY) {
+                history.shift();
+            } else {
+                historyIndex++;
+            }
+            
+            updateUndoRedoButtons();
+            autoSave();
+        }
+
+        /**
+         * Restores a previous state.
+         */
+        function restoreState(state) {
+            nodes = JSON.parse(JSON.stringify(state.nodes));
+            connections = JSON.parse(JSON.stringify(state.connections));
+            groups = JSON.parse(JSON.stringify(state.groups || []));
+            nextNodeId = state.nextNodeId;
+            nextGroupId = state.nextGroupId || 0;
+            
+            // IMPORTANT: Clear selections because the object references have changed
+            selectedNode = null;
+            selectedConnection = null;
+            selectedGroup = null;
+            hoveredConnection = null;
+            hideEditor();
+            updateGroupButtons();
+        }
+
+        /**
+         * Undo the last action.
+         */
+        function undo() {
+            if (historyIndex > 0) {
+                historyIndex--;
+                restoreState(history[historyIndex]);
+                updateUndoRedoButtons();
+                autoSave();
+                messageBox('Undo');
+            }
+        }
+
+        /**
+         * Redo the last undone action.
+         */
+        function redo() {
+            if (historyIndex < history.length - 1) {
+                historyIndex++;
+                restoreState(history[historyIndex]);
+                updateUndoRedoButtons();
+                autoSave();
+                messageBox('Redo');
+            }
+        }
+
+        /**
+         * Update undo/redo button states.
+         */
+        function updateUndoRedoButtons() {
+            undoBtn.disabled = historyIndex <= 0;
+            redoBtn.disabled = historyIndex >= history.length - 1;
+            undoBtn.style.opacity = historyIndex <= 0 ? '0.5' : '1';
+            redoBtn.style.opacity = historyIndex >= history.length - 1 ? '0.5' : '1';
+        }
+
+        // --- Auto-save and Persistence ---
+
+        /**
+         * Automatically save the current state to localStorage.
+         */
+        function autoSave() {
+            try {
+                const saveData = {
+                    nodes: nodes,
+                    connections: connections,
+                    groups: groups,
+                    nextNodeId: nextNodeId,
+                    nextGroupId: nextGroupId,
+                    canvasOffsetX: canvasOffsetX,
+                    canvasOffsetY: canvasOffsetY,
+                    scale: scale
+                };
+                localStorage.setItem(CONFIG.AUTOSAVE_KEY, JSON.stringify(saveData));
+            } catch (e) {
+                console.error('Auto-save failed:', e);
+            }
+        }
+
+        /**
+         * Load saved state from localStorage.
+         */
+        function autoLoad() {
+            try {
+                const saved = localStorage.getItem(CONFIG.AUTOSAVE_KEY);
+                if (saved) {
+                    const saveData = JSON.parse(saved);
+                    nodes = saveData.nodes || nodes;
+                    connections = saveData.connections || connections;
+                    groups = saveData.groups || [];
+                    nextNodeId = saveData.nextNodeId || nextNodeId;
+                    nextGroupId = saveData.nextGroupId || 0;
+                    canvasOffsetX = saveData.canvasOffsetX || 0;
+                    canvasOffsetY = saveData.canvasOffsetY || 0;
+                    scale = saveData.scale || 1.0;
+                    messageBox('Previous work restored from auto-save');
+                }
+            } catch (e) {
+                console.error('Auto-load failed:', e);
+            }
+        }
+
+        // --- Copy/Paste Functions ---
+
+        /**
+         * Copy the selected node to clipboard
+         */
+        function copyNode() {
+            if (selectedNode) {
+                copiedNode = {
+                    type: selectedNode.type,
+                    text: selectedNode.text,
+                    w: selectedNode.w,
+                    h: selectedNode.h
+                };
+                messageBox(`✓ Copied: ${selectedNode.text}`);
+            } else {
+                messageBox('⚠ No block selected to copy');
+            }
+        }
+
+        /**
+         * Paste the copied node at mouse position or center
+         */
+        function pasteNode(worldX = null, worldY = null) {
+            if (!copiedNode) {
+                messageBox('⚠ Nothing to paste. Copy a block first (Ctrl+C)');
+                return;
+            }
+
+            captureState(); // Capture state before paste
+
+            // Determine paste position
+            let pasteX, pasteY;
+            if (worldX !== null && worldY !== null) {
+                // Paste at mouse position (right-click context menu)
+                pasteX = worldX;
+                pasteY = worldY;
+            } else if (selectedNode) {
+                // Paste with offset from selected node
+                pasteX = selectedNode.x + CONFIG.PASTE_OFFSET;
+                pasteY = selectedNode.y + CONFIG.PASTE_OFFSET;
+            } else {
+                // Paste at center of viewport
+                pasteX = canvasOffsetX + canvas.width / 2 / scale;
+                pasteY = canvasOffsetY + canvas.height / 2 / scale;
+            }
+
+            // Create new node with copied properties
+            const newNode = {
+                id: getNextNodeId(),
+                x: pasteX,
+                y: pasteY,
+                w: copiedNode.w,
+                h: copiedNode.h,
+                type: copiedNode.type,
+                text: copiedNode.text
+            };
+
+            nodes.push(newNode);
+            selectedNode = newNode;
+            selectedConnection = null;
+
+            captureState(); // Capture state after paste
+            messageBox(`✓ Pasted: ${newNode.text}`);
+        }
+
+        /**
+         * Duplicate the selected node (copy + paste in one action)
+         */
+        function duplicateNode() {
+            if (selectedNode) {
+                copyNode();
+                pasteNode();
+            } else {
+                messageBox('⚠ No block selected to duplicate');
+            }
+        }
+
+        // --- Export/Import Functions ---
+
+        /**
+         * Check if File System Access API is supported.
+         */
+        function isFileSystemAccessSupported() {
+            return 'showDirectoryPicker' in window;
+        }
+
+        /**
+         * Let user choose a folder to save exports to.
+         */
+        async function chooseExportFolder() {
+            if (!isFileSystemAccessSupported()) {
+                alert('📁 Folder selection is not supported in your browser.\n\nThis feature works in Chrome, Edge, and other Chromium-based browsers.\n\nFiles will be saved to your default Downloads folder.');
+                return;
+            }
+
+            try {
+                // Request directory picker
+                const directoryHandle = await window.showDirectoryPicker({
+                    mode: 'readwrite',
+                    startIn: 'downloads'
+                });
+                
+                savedDirectoryHandle = directoryHandle;
+                selectedFolderDisplay.textContent = `📁 ${directoryHandle.name}`;
+                selectedFolderDisplay.style.color = '#00338D';
+                selectedFolderDisplay.style.fontWeight = '600';
+                selectedFolderDisplay.style.fontStyle = 'normal';
+                
+                messageBox(`✓ Export folder set to: ${directoryHandle.name}`);
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.error('Error selecting folder:', err);
+                    messageBox('⚠ Failed to select folder');
+                }
+            }
+        }
+
+        /**
+         * Show the export modal with filename input.
+         */
+        function showExportModal() {
+            // Generate default filename with timestamp
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+            const defaultName = `flowchart_${timestamp}`;
+            exportFilename.value = defaultName;
+            updateExportPreview();
+            
+            // Update folder display
+            if (savedDirectoryHandle) {
+                selectedFolderDisplay.textContent = `📁 ${savedDirectoryHandle.name}`;
+                selectedFolderDisplay.style.color = '#00338D';
+                selectedFolderDisplay.style.fontWeight = '600';
+                selectedFolderDisplay.style.fontStyle = 'normal';
+            } else {
+                selectedFolderDisplay.textContent = 'Browser default (Downloads folder)';
+                selectedFolderDisplay.style.color = '#6b7280';
+                selectedFolderDisplay.style.fontWeight = 'normal';
+                selectedFolderDisplay.style.fontStyle = 'italic';
+            }
+            
+            exportModal.style.display = 'block';
+            exportFilename.focus();
+            exportFilename.select();
+        }
+
+        /**
+         * Update the filename preview as user types.
+         */
+        function updateExportPreview() {
+            let filename = exportFilename.value.trim();
+            if (!filename) filename = 'flowchart';
+            // Remove .json extension if user added it
+            if (filename.endsWith('.json')) {
+                filename = filename.slice(0, -5);
+            }
+            exportFilenamePreview.textContent = `${filename}.json`;
+        }
+
+        /**
+         * Export using File System Access API (to chosen folder).
+         */
+        async function exportToFolder(filename, exportData) {
+            try {
+                // Create file in the chosen directory
+                const fileHandle = await savedDirectoryHandle.getFileHandle(`${filename}.json`, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(JSON.stringify(exportData, null, 2));
+                await writable.close();
+                
+                exportModal.style.display = 'none';
+                messageBox(`✓ Exported to ${savedDirectoryHandle.name}/${filename}.json`);
+            } catch (err) {
+                console.error('Error writing file:', err);
+                messageBox('⚠ Failed to save file. Using default download instead...');
+                // Fallback to traditional download
+                exportToDownloads(filename, exportData);
+            }
+        }
+
+        /**
+         * Export using traditional download (to Downloads folder).
+         */
+        function exportToDownloads(filename, exportData) {
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${filename}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            exportModal.style.display = 'none';
+            messageBox(`✓ Flowchart exported as ${filename}.json`);
+        }
+
+        /**
+         * Export the flowchart as a JSON file with user-specified filename.
+         */
+        async function exportFlowchart() {
+            let filename = exportFilename.value.trim();
+            if (!filename) filename = 'flowchart';
+            
+            // Remove .json extension if user added it
+            if (filename.endsWith('.json')) {
+                filename = filename.slice(0, -5);
+            }
+            
+            const exportData = {
+                version: '1.0',
+                nodes: nodes,
+                connections: connections,
+                groups: groups,
+                metadata: {
+                    created: new Date().toISOString(),
+                    nodeCount: nodes.length,
+                    connectionCount: connections.length,
+                    groupCount: groups.length
+                }
+            };
+            
+            // Use File System Access API if folder is selected, otherwise use traditional download
+            if (savedDirectoryHandle && isFileSystemAccessSupported()) {
+                await exportToFolder(filename, exportData);
+            } else {
+                exportToDownloads(filename, exportData);
+            }
+        }
+
+        /**
+         * Import a flowchart from a JSON file.
+         */
+        function importFlowchart(fileContent, clearFirst = true) {
+            try {
+                const importData = JSON.parse(fileContent);
+                
+                if (!importData.nodes || !importData.connections) {
+                    throw new Error('Invalid flowchart file format');
+                }
+                
+                // Capture current state before import
+                captureState();
+                
+                if (clearFirst) {
+                    // Replace entire flowchart
+                    nodes = importData.nodes;
+                    connections = importData.connections;
+                    groups = importData.groups || [];
+                    
+                    // Find the highest node ID to set nextNodeId
+                    const maxId = nodes.reduce((max, node) => Math.max(max, node.id), 0);
+                    nextNodeId = maxId + 1;
+                    
+                    // Find the highest group ID to set nextGroupId
+                    if (groups.length > 0) {
+                        const maxGroupId = groups.reduce((max, group) => Math.max(max, group.id), 0);
+                        nextGroupId = maxGroupId + 1;
+                    } else {
+                        nextGroupId = 0;
+                    }
+                } else {
+                    // Append to existing flowchart
+                    const idOffset = nextNodeId;
+                    const groupIdOffset = nextGroupId;
+                    
+                    // Import nodes with ID offset
+                    const importedNodes = importData.nodes.map(node => ({
+                        ...node,
+                        id: node.id + idOffset
+                    }));
+                    
+                    // Import connections with ID offset
+                    const importedConnections = importData.connections.map(conn => ({
+                        ...conn,
+                        from: conn.from + idOffset,
+                        to: conn.to + idOffset
+                    }));
+                    
+                    // Import groups with ID offsets
+                    const importedGroups = (importData.groups || []).map(group => ({
+                        ...group,
+                        id: group.id + groupIdOffset,
+                        nodeIds: group.nodeIds.map(nodeId => nodeId + idOffset)
+                    }));
+                    
+                    nodes.push(...importedNodes);
+                    connections.push(...importedConnections);
+                    groups.push(...importedGroups);
+                    
+                    nextNodeId += importData.nodes.length;
+                    nextGroupId += (importData.groups || []).length;
+                }
+                
+                selectedNode = null;
+                selectedNodes = [];
+                selectedConnection = null;
+                selectedGroup = null;
+                hideEditor();
+                updateGroupButtons();
+                
+                // Center view on imported content
+                if (importData.nodes.length > 0) {
+                    const avgX = importData.nodes.reduce((sum, n) => sum + n.x, 0) / importData.nodes.length;
+                    const avgY = importData.nodes.reduce((sum, n) => sum + n.y, 0) / importData.nodes.length;
+                    canvasOffsetX = avgX - canvas.width / 2 / scale;
+                    canvasOffsetY = avgY - canvas.height / 2 / scale;
+                }
+                
+                captureState();
+                updateAlignmentButtons();
+                messageBox(`✓ Imported ${importData.nodes.length} blocks and ${importData.connections.length} connections`);
+                
+            } catch (e) {
+                messageBox('Error: Could not import JSON. ' + e.message);
+                console.error('Import error:', e);
+            }
+        }
+
+        /**
+         * Show JSON import modal
+         */
+        function showJsonImportModal() {
+            jsonImportTextarea.value = '';
+            jsonImportClearFirst.checked = true;
+            jsonImportModal.style.display = 'block';
+            jsonImportTextarea.focus();
+        }
+
+        /**
+         * Import flowchart from JSON text input
+         */
+        function importFromJsonText() {
+            const jsonText = jsonImportTextarea.value.trim();
+            
+            if (!jsonText) {
+                messageBox('⚠️ Please paste JSON content');
+                return;
+            }
+            
+            const clearFirst = jsonImportClearFirst.checked;
+            importFlowchart(jsonText, clearFirst);
+            jsonImportModal.style.display = 'none';
+        }
+
+        // --- Snap to Grid ---
+
+        /**
+         * Snap a coordinate to the nearest grid point.
+         */
+        function snapToGridCoord(value) {
+            return Math.round(value / CONFIG.GRID_SIZE) * CONFIG.GRID_SIZE;
+        }
+
+        /**
+         * Toggle snap to grid feature.
+         */
+        function toggleSnapToGrid() {
+            snapToGrid = !snapToGrid;
+            messageBox(`Snap to Grid: ${snapToGrid ? 'ON' : 'OFF'}`);
+        }
+
+        /**
+         * Clear the entire canvas (with confirmation).
+         */
+        function clearCanvas() {
+            if (nodes.length === 0 && connections.length === 0) {
+                messageBox('Canvas is already empty');
+                return;
+            }
+            
+            const confirmed = confirm(`Are you sure you want to clear the entire canvas?\n\nThis will delete all ${nodes.length} blocks and ${connections.length} connections.\n\nYou can undo this action.`);
+            
+            if (confirmed) {
+                captureState(); // Capture state before clearing
+                nodes = [];
+                connections = [];
+                groups = [];
+                selectedNode = null;
+                selectedNodes = [];
+                selectedConnection = null;
+                selectedGroup = null;
+                hoveredConnection = null;
+                nextNodeId = 0;
+                nextGroupId = 0;
+                captureState(); // Capture state after clearing
+                updateGroupButtons();
+                messageBox('✓ Canvas cleared successfully');
+            }
+        }
+
+        // --- Multi-Select & Alignment Functions ---
+
+        /**
+         * Update alignment button states based on selection
+         */
+        function updateAlignmentButtons() {
+            const hasMultipleSelected = selectedNodes.length >= 2;
+            const hasThreeOrMore = selectedNodes.length >= 3;
+            
+            alignLeftBtn.disabled = !hasMultipleSelected;
+            alignCenterHBtn.disabled = !hasMultipleSelected;
+            alignRightBtn.disabled = !hasMultipleSelected;
+            alignTopBtn.disabled = !hasMultipleSelected;
+            alignCenterVBtn.disabled = !hasMultipleSelected;
+            alignBottomBtn.disabled = !hasMultipleSelected;
+            distributeHBtn.disabled = !hasThreeOrMore;
+            distributeVBtn.disabled = !hasThreeOrMore;
+            autoLayoutBtn.disabled = nodes.length === 0;
+            
+            // Visual feedback
+            const buttons = [alignLeftBtn, alignCenterHBtn, alignRightBtn, alignTopBtn, 
+                           alignCenterVBtn, alignBottomBtn, distributeHBtn, distributeVBtn];
+            buttons.forEach(btn => {
+                btn.style.opacity = btn.disabled ? '0.5' : '1';
+            });
+        }
+
+        /**
+         * Get the bounding box of selected nodes
+         */
+        function getSelectionBounds() {
+            if (selectedNodes.length === 0) return null;
+            
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+            
+            selectedNodes.forEach(node => {
+                const left = node.x - node.w / 2;
+                const right = node.x + node.w / 2;
+                const top = node.y - node.h / 2;
+                const bottom = node.y + node.h / 2;
+                
+                minX = Math.min(minX, left);
+                maxX = Math.max(maxX, right);
+                minY = Math.min(minY, top);
+                maxY = Math.max(maxY, bottom);
+            });
+            
+            return { minX, maxX, minY, maxY };
+        }
+
+        /**
+         * Align selected nodes to the left
+         */
+        function alignLeft() {
+            if (selectedNodes.length < 2) return;
+            
+            captureState();
+            const bounds = getSelectionBounds();
+            selectedNodes.forEach(node => {
+                node.x = bounds.minX + node.w / 2;
+            });
+            captureState();
+            messageBox(`✓ Aligned ${selectedNodes.length} blocks to left`);
+        }
+
+        /**
+         * Align selected nodes to the right
+         */
+        function alignRight() {
+            if (selectedNodes.length < 2) return;
+            
+            captureState();
+            const bounds = getSelectionBounds();
+            selectedNodes.forEach(node => {
+                node.x = bounds.maxX - node.w / 2;
+            });
+            captureState();
+            messageBox(`✓ Aligned ${selectedNodes.length} blocks to right`);
+        }
+
+        /**
+         * Align selected nodes to the top
+         */
+        function alignTop() {
+            if (selectedNodes.length < 2) return;
+            
+            captureState();
+            const bounds = getSelectionBounds();
+            selectedNodes.forEach(node => {
+                node.y = bounds.minY + node.h / 2;
+            });
+            captureState();
+            messageBox(`✓ Aligned ${selectedNodes.length} blocks to top`);
+        }
+
+        /**
+         * Align selected nodes to the bottom
+         */
+        function alignBottom() {
+            if (selectedNodes.length < 2) return;
+            
+            captureState();
+            const bounds = getSelectionBounds();
+            selectedNodes.forEach(node => {
+                node.y = bounds.maxY - node.h / 2;
+            });
+            captureState();
+            messageBox(`✓ Aligned ${selectedNodes.length} blocks to bottom`);
+        }
+
+        /**
+         * Center selected nodes horizontally
+         */
+        function alignCenterH() {
+            if (selectedNodes.length < 2) return;
+            
+            captureState();
+            const bounds = getSelectionBounds();
+            const centerX = (bounds.minX + bounds.maxX) / 2;
+            selectedNodes.forEach(node => {
+                node.x = centerX;
+            });
+            captureState();
+            messageBox(`✓ Centered ${selectedNodes.length} blocks horizontally`);
+        }
+
+        /**
+         * Center selected nodes vertically
+         */
+        function alignCenterV() {
+            if (selectedNodes.length < 2) return;
+            
+            captureState();
+            const bounds = getSelectionBounds();
+            const centerY = (bounds.minY + bounds.maxY) / 2;
+            selectedNodes.forEach(node => {
+                node.y = centerY;
+            });
+            captureState();
+            messageBox(`✓ Centered ${selectedNodes.length} blocks vertically`);
+        }
+
+        /**
+         * Distribute selected nodes horizontally
+         */
+        function distributeHorizontally() {
+            if (selectedNodes.length < 3) return;
+            
+            captureState();
+            
+            // Sort by X position
+            const sorted = [...selectedNodes].sort((a, b) => a.x - b.x);
+            const first = sorted[0];
+            const last = sorted[sorted.length - 1];
+            
+            const totalSpace = last.x - first.x;
+            const gap = totalSpace / (sorted.length - 1);
+            
+            sorted.forEach((node, index) => {
+                if (index > 0 && index < sorted.length - 1) {
+                    node.x = first.x + gap * index;
+                }
+            });
+            
+            captureState();
+            messageBox(`✓ Distributed ${selectedNodes.length} blocks horizontally`);
+        }
+
+        /**
+         * Distribute selected nodes vertically
+         */
+        function distributeVertically() {
+            if (selectedNodes.length < 3) return;
+            
+            captureState();
+            
+            // Sort by Y position
+            const sorted = [...selectedNodes].sort((a, b) => a.y - b.y);
+            const first = sorted[0];
+            const last = sorted[sorted.length - 1];
+            
+            const totalSpace = last.y - first.y;
+            const gap = totalSpace / (sorted.length - 1);
+            
+            sorted.forEach((node, index) => {
+                if (index > 0 && index < sorted.length - 1) {
+                    node.y = first.y + gap * index;
+                }
+            });
+            
+            captureState();
+            messageBox(`✓ Distributed ${selectedNodes.length} blocks vertically`);
+        }
+
+        /**
+         * Auto layout - Hierarchical top-down arrangement (BFS-based)
+         */
+        function autoLayoutHierarchical() {
+            if (nodes.length === 0) return;
+            
+            captureState();
+            
+            // Find root nodes (nodes with no incoming connections)
+            const incomingCount = new Map();
+            nodes.forEach(node => incomingCount.set(node.id, 0));
+            connections.forEach(conn => {
+                incomingCount.set(conn.to, (incomingCount.get(conn.to) || 0) + 1);
+            });
+            
+            const roots = nodes.filter(node => incomingCount.get(node.id) === 0);
+            if (roots.length === 0) {
+                // No clear root, use first node
+                roots.push(nodes[0]);
+            }
+            
+            // Build adjacency list
+            const adjacency = new Map();
+            nodes.forEach(node => adjacency.set(node.id, []));
+            connections.forEach(conn => {
+                adjacency.get(conn.from).push(conn.to);
+            });
+            
+            // BFS to assign layers
+            const layers = [];
+            const visited = new Set();
+            const queue = roots.map(r => ({ id: r.id, layer: 0 }));
+            
+            while (queue.length > 0) {
+                const { id, layer } = queue.shift();
+                if (visited.has(id)) continue;
+                visited.add(id);
+                
+                if (!layers[layer]) layers[layer] = [];
+                layers[layer].push(id);
+                
+                const children = adjacency.get(id) || [];
+                children.forEach(childId => {
+                    if (!visited.has(childId)) {
+                        queue.push({ id: childId, layer: layer + 1 });
+                    }
+                });
+            }
+            
+            // Add unconnected nodes to last layer
+            nodes.forEach(node => {
+                if (!visited.has(node.id)) {
+                    const lastLayer = layers.length;
+                    if (!layers[lastLayer]) layers[lastLayer] = [];
+                    layers[lastLayer].push(node.id);
+                }
+            });
+            
+            // Position nodes
+            const layerGap = 150;
+            const nodeGap = 180;
+            const startY = 100;
+            
+            layers.forEach((layer, layerIndex) => {
+                const y = startY + layerIndex * layerGap;
+                const totalWidth = (layer.length - 1) * nodeGap;
+                const startX = -totalWidth / 2 + canvas.width / 2 / scale + canvasOffsetX;
+                
+                layer.forEach((nodeId, index) => {
+                    const node = nodes.find(n => n.id === nodeId);
+                    if (node) {
+                        node.x = startX + index * nodeGap;
+                        node.y = y + canvasOffsetY;
+                    }
+                });
+            });
+            
+            captureState();
+            messageBox(`✓ Hierarchical layout applied: ${layers.length} layers, ${nodes.length} blocks`);
+        }
+
+        /**
+         * Auto layout - Force-directed graph layout (physics simulation)
+         */
+        function autoLayoutForceDirected() {
+            if (nodes.length === 0) return;
+            
+            captureState();
+            
+            // Physics parameters
+            const iterations = 150;
+            const repulsionStrength = 30000;
+            const attractionStrength = 0.01;
+            const idealSpringLength = 200;
+            const damping = 0.9;
+            const centeringForce = 0.005;
+            
+            // Initialize velocities
+            const velocities = new Map();
+            nodes.forEach(node => {
+                velocities.set(node.id, { vx: 0, vy: 0 });
+            });
+            
+            // Build connection map for faster lookup
+            const connectionMap = new Map();
+            nodes.forEach(node => connectionMap.set(node.id, new Set()));
+            connections.forEach(conn => {
+                connectionMap.get(conn.from).add(conn.to);
+                connectionMap.get(conn.to).add(conn.from);
+            });
+            
+            // Calculate canvas center in world coordinates
+            const centerX = canvas.width / 2 / scale + canvasOffsetX;
+            const centerY = canvas.height / 2 / scale + canvasOffsetY;
+            
+            // Simulation loop
+            for (let iter = 0; iter < iterations; iter++) {
+                const forces = new Map();
+                nodes.forEach(node => {
+                    forces.set(node.id, { fx: 0, fy: 0 });
+                });
+                
+                // Repulsion force (all pairs)
+                for (let i = 0; i < nodes.length; i++) {
+                    for (let j = i + 1; j < nodes.length; j++) {
+                        const nodeA = nodes[i];
+                        const nodeB = nodes[j];
+                        
+                        const dx = nodeB.x - nodeA.x;
+                        const dy = nodeB.y - nodeA.y;
+                        const distSq = dx * dx + dy * dy + 0.01; // Add small epsilon to avoid division by zero
+                        const dist = Math.sqrt(distSq);
+                        
+                        const force = repulsionStrength / distSq;
+                        const fx = (dx / dist) * force;
+                        const fy = (dy / dist) * force;
+                        
+                        // Apply equal and opposite forces
+                        const forceA = forces.get(nodeA.id);
+                        const forceB = forces.get(nodeB.id);
+                        forceA.fx -= fx;
+                        forceA.fy -= fy;
+                        forceB.fx += fx;
+                        forceB.fy += fy;
+                    }
+                }
+                
+                // Attraction force (connected nodes only)
+                connections.forEach(conn => {
+                    const fromNode = nodes.find(n => n.id === conn.from);
+                    const toNode = nodes.find(n => n.id === conn.to);
+                    
+                    if (!fromNode || !toNode) return;
+                    
+                    const dx = toNode.x - fromNode.x;
+                    const dy = toNode.y - fromNode.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy + 0.01);
+                    
+                    // Spring force: F = k * (distance - idealLength)
+                    const displacement = dist - idealSpringLength;
+                    const force = attractionStrength * displacement;
+                    const fx = (dx / dist) * force;
+                    const fy = (dy / dist) * force;
+                    
+                    // Apply forces
+                    const forceFrom = forces.get(fromNode.id);
+                    const forceTo = forces.get(toNode.id);
+                    forceFrom.fx += fx;
+                    forceFrom.fy += fy;
+                    forceTo.fx -= fx;
+                    forceTo.fy -= fy;
+                });
+                
+                // Centering force (pull towards canvas center)
+                nodes.forEach(node => {
+                    const force = forces.get(node.id);
+                    force.fx += (centerX - node.x) * centeringForce;
+                    force.fy += (centerY - node.y) * centeringForce;
+                });
+                
+                // Update velocities and positions
+                nodes.forEach(node => {
+                    const force = forces.get(node.id);
+                    const velocity = velocities.get(node.id);
+                    
+                    // Update velocity: v = v + F
+                    velocity.vx = (velocity.vx + force.fx) * damping;
+                    velocity.vy = (velocity.vy + force.fy) * damping;
+                    
+                    // Update position: x = x + v
+                    node.x += velocity.vx;
+                    node.y += velocity.vy;
+                });
+            }
+            
+            captureState();
+            messageBox(`✓ Force-directed layout applied: ${nodes.length} blocks, ${iterations} iterations`);
+        }
+
+        /**
+         * Auto layout dispatcher - toggles between hierarchical and force-directed
+         */
+        let useForceDirectedLayout = false;
+        
+        function autoLayout() {
+            if (useForceDirectedLayout) {
+                autoLayoutForceDirected();
+            } else {
+                autoLayoutHierarchical();
+            }
+        }
+        
+        function toggleLayoutMode() {
+            useForceDirectedLayout = !useForceDirectedLayout;
+            const mode = useForceDirectedLayout ? 'Force-Directed' : 'Hierarchical';
+            messageBox(`Layout mode: ${mode}`);
+            
+            // Update button title
+            if (autoLayoutBtn) {
+                autoLayoutBtn.title = useForceDirectedLayout 
+                    ? 'Auto Layout (Force-Directed) - Physics-based natural positioning' 
+                    : 'Auto Layout (Hierarchical) - Top-down flow arrangement';
+            }
+        }
+
+        // --- Grouping Functions ---
+
+        /**
+         * Generate colors for groups
+         */
+        const GROUP_COLORS = [
+            '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
+            '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B739', '#52B788'
+        ];
+
+        function getGroupColor(groupId) {
+            return GROUP_COLORS[groupId % GROUP_COLORS.length];
+        }
+
+        /**
+         * Update group button states
+         */
+        function updateGroupButtons() {
+            const hasMultipleSelected = selectedNodes.length >= 2;
+            const hasGroupSelected = selectedGroup !== null;
+            const nodeInGroup = selectedNode && groups.some(g => g.nodeIds.includes(selectedNode.id));
+            
+            createGroupBtn.disabled = !hasMultipleSelected;
+            ungroupBtn.disabled = !hasGroupSelected && !nodeInGroup;
+            selectGroupBtn.disabled = groups.length === 0;
+            
+            // Visual feedback
+            createGroupBtn.style.opacity = createGroupBtn.disabled ? '0.5' : '1';
+            ungroupBtn.style.opacity = ungroupBtn.disabled ? '0.5' : '1';
+            selectGroupBtn.style.opacity = selectGroupBtn.disabled ? '0.5' : '1';
+        }
+
+        /**
+         * Create a group from selected nodes
+         */
+        function createGroup() {
+            if (selectedNodes.length < 2) {
+                messageBox('⚠️ Select at least 2 blocks to create a group');
+                return;
+            }
+            
+            captureState();
+            
+            const groupId = nextGroupId++;
+            const groupName = `Group ${groupId + 1}`;
+            const nodeIds = selectedNodes.map(n => n.id);
+            const color = getGroupColor(groupId);
+            
+            const newGroup = {
+                id: groupId,
+                name: groupName,
+                nodeIds: nodeIds,
+                color: color
+            };
+            
+            groups.push(newGroup);
+            selectedGroup = newGroup;
+            selectedNodes = []; // Clear multi-select after grouping
+            
+            captureState();
+            updateGroupButtons();
+            updateAlignmentButtons();
+            
+            messageBox(`✓ Created "${groupName}" with ${nodeIds.length} blocks`);
+        }
+
+        /**
+         * Remove a group (ungroup)
+         */
+        function ungroup() {
+            let groupToRemove = selectedGroup;
+            
+            // If no group selected, check if selected node is in a group
+            if (!groupToRemove && selectedNode) {
+                groupToRemove = groups.find(g => g.nodeIds.includes(selectedNode.id));
+            }
+            
+            if (!groupToRemove) {
+                messageBox('⚠️ No group selected');
+                return;
+            }
+            
+            captureState();
+            
+            const groupName = groupToRemove.name;
+            const nodeCount = groupToRemove.nodeIds.length;
+            groups = groups.filter(g => g.id !== groupToRemove.id);
+            
+            if (selectedGroup === groupToRemove) {
+                selectedGroup = null;
+            }
+            
+            captureState();
+            updateGroupButtons();
+            
+            messageBox(`✓ Ungrouped "${groupName}" (${nodeCount} blocks released)`);
+        }
+
+        /**
+         * Select all nodes in a group by clicking one member
+         */
+        function selectGroupMembers(node) {
+            const group = groups.find(g => g.nodeIds.includes(node.id));
+            if (group) {
+                selectedGroup = group;
+                selectedNodes = nodes.filter(n => group.nodeIds.includes(n.id));
+                updateGroupButtons();
+                updateAlignmentButtons();
+                messageBox(`✓ Selected group "${group.name}" (${selectedNodes.length} blocks)`);
+                return true;
+            }
+            return false;
+        }
+
+        /**
+         * Show group selection menu
+         */
+        function showGroupSelection() {
+            if (groups.length === 0) {
+                messageBox('⚠️ No groups available');
+                return;
+            }
+            
+            const groupList = groups.map((g, index) => 
+                `${index + 1}. ${g.name} (${g.nodeIds.length} blocks)`
+            ).join('\n');
+            
+            const choice = prompt(`Select a group:\n\n${groupList}\n\nEnter group number (1-${groups.length}):`);
+            
+            if (choice) {
+                const groupIndex = parseInt(choice) - 1;
+                if (groupIndex >= 0 && groupIndex < groups.length) {
+                    const group = groups[groupIndex];
+                    selectedGroup = group;
+                    selectedNodes = nodes.filter(n => group.nodeIds.includes(n.id));
+                    selectedNode = null;
+                    updateGroupButtons();
+                    updateAlignmentButtons();
+                    messageBox(`✓ Selected group "${group.name}"`);
+                } else {
+                    messageBox('⚠️ Invalid group number');
+                }
+            }
+        }
+
+        /**
+         * Get the group that a node belongs to
+         */
+        function getNodeGroup(nodeId) {
+            return groups.find(g => g.nodeIds.includes(nodeId));
+        }
+
+        /**
+         * Check if dragging should move entire group
+         */
+        function shouldMoveGroup(node) {
+            const group = getNodeGroup(node.id);
+            return group && selectedGroup === group;
+        }
+
+        /**
+         * Move entire group together
+         */
+        function moveGroup(group, deltaX, deltaY) {
+            group.nodeIds.forEach(nodeId => {
+                const node = nodes.find(n => n.id === nodeId);
+                if (node) {
+                    node.x += deltaX;
+                    node.y += deltaY;
+                }
+            });
+        }
+
+        /**
+         * Get group label geometry in world coordinates
+         */
+        function getGroupLabelBounds(group) {
+            if (group.nodeIds.length === 0) return null;
+            
+            const groupNodes = nodes.filter(n => group.nodeIds.includes(n.id));
+            if (groupNodes.length === 0) return null;
+            
+            // Calculate bounding box for group
+            let minX = Infinity, minY = Infinity;
+            groupNodes.forEach(node => {
+                const left = node.x - node.w / 2;
+                const top = node.y - node.h / 2;
+                minX = Math.min(minX, left);
+                minY = Math.min(minY, top);
+            });
+            
+            const padding = 20;
+            minX -= padding;
+            minY -= padding;
+            
+            // Estimate label size in world coordinates
+            const labelFontSize = 14; // Base font size
+            const labelWidth = group.name.length * labelFontSize * 0.6; // Approximate width
+            const labelHeight = labelFontSize * 1.2;
+            const labelPadding = 5;
+            
+            return {
+                x: minX + labelPadding,
+                y: minY + labelPadding,
+                width: labelWidth,
+                height: labelHeight
+            };
+        }
+
+        /**
+         * Check if a world coordinate point is near a group label
+         */
+        function isPointNearGroupLabel(worldX, worldY) {
+            for (const group of groups) {
+                const bounds = getGroupLabelBounds(group);
+                if (!bounds) continue;
+                
+                if (worldX >= bounds.x && worldX <= bounds.x + bounds.width &&
+                    worldY >= bounds.y && worldY <= bounds.y + bounds.height) {
+                    return group;
+                }
+            }
+            return null;
+        }
+
+        /**
+         * Start editing a group name
+         */
+        function startEditingGroupName(group) {
+            editingGroupName = group;
+            const newName = prompt(`Rename group "${group.name}":`, group.name);
+            
+            if (newName !== null && newName.trim() !== '' && newName !== group.name) {
+                captureState();
+                group.name = newName.trim();
+                captureState();
+                messageBox(`✓ Renamed to "${group.name}"`);
+            }
+            
+            editingGroupName = null;
+        }
+
+        // --- Coordinate Mapping Utilities ---
+
+        /**
+         * Converts screen coordinates (relative to canvas top-left) to world coordinates.
+         */
+        function screenToWorld(screenX, screenY) {
+            return {
+                x: (screenX / scale) + canvasOffsetX,
+                y: (screenY / scale) + canvasOffsetY
+            };
+        }
+
+        /**
+         * Converts world coordinates (node center, label mid-point) to screen coordinates.
+         */
+        function worldToScreen(worldX, worldY) {
+            return {
+                x: (worldX - canvasOffsetX) * scale,
+                y: (worldY - canvasOffsetY) * scale
+            };
+        }
+
+
+        // --- Drawing Utilities ---
+
+        /**
+         * Wrap text into multiple lines to fit within a given width.
+         * Respects explicit line breaks (\n).
+         */
+        function wrapText(text, maxWidth, fontSize) {
+            ctx.font = `${fontSize}px Inter`;
+            
+            // Split by explicit line breaks first
+            const paragraphs = text.split('\n');
+            const lines = [];
+            
+            paragraphs.forEach(paragraph => {
+                if (paragraph.trim() === '') {
+                    lines.push(''); // Preserve empty lines
+                    return;
+                }
+                
+                const words = paragraph.split(' ');
+                let currentLine = words[0];
+                
+                for (let i = 1; i < words.length; i++) {
+                    const word = words[i];
+                    const testLine = currentLine + ' ' + word;
+                    const metrics = ctx.measureText(testLine);
+                    const testWidth = metrics.width;
+                    
+                    if (testWidth > maxWidth && i > 0) {
+                        lines.push(currentLine);
+                        currentLine = word;
+                    } else {
+                        currentLine = testLine;
+                    }
+                }
+                lines.push(currentLine);
+            });
+            
+            return lines;
+        }
+
+        /**
+         * Draw multi-line text centered in a node.
+         */
+        function drawMultilineText(lines, centerX, centerY, lineHeight) {
+            const totalHeight = lines.length * lineHeight;
+            let startY = centerY - totalHeight / 2 + lineHeight / 2;
+            
+            lines.forEach((line, index) => {
+                ctx.fillText(line, centerX, startY + index * lineHeight);
+            });
+        }
+
+        // Draw an arrowhead, adjusted for scale
+        function drawArrowhead(fromX, fromY, toX, toY, color) {
+            // Arrowhead size scales with zoom
+            const headlen = CONFIG.ARROWHEAD_SIZE * scale; 
+            const angle = Math.atan2(toY - fromY, toX - fromX);
+            
+            ctx.beginPath();
+            ctx.moveTo(toX, toY);
+            ctx.lineTo(toX - headlen * Math.cos(angle - Math.PI / 6), toY - headlen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(toX - headlen * Math.cos(angle + Math.PI / 6), toY - headlen * Math.sin(angle + Math.PI / 6));
+            ctx.lineTo(toX, toY);
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
+
+        function roundRect(x, y, w, h, r) {
+            if (w < 2 * r) r = w / 2;
+            if (h < 2 * r) r = h / 2;
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.arcTo(x + w, y, x + w, y + h, r);
+            ctx.arcTo(x + w, y + h, x, y + h, r);
+            ctx.arcTo(x, y + h, x, y, r);
+            ctx.arcTo(x, y, x + w, y, r);
+            ctx.closePath();
+        }
+
+        function drawDiamond(x, y, w, h) {
+            ctx.beginPath();
+            ctx.moveTo(x, y - h / 2); // Top point
+            ctx.lineTo(x + w / 2, y); // Right point
+            ctx.lineTo(x, y + h / 2); // Bottom point
+            ctx.lineTo(x - w / 2, y); // Left point
+            ctx.closePath();
+        }
+
+        function drawTerminator(x, y, w, h) {
+            // Terminator: Rounded rectangle (pill shape) for Start/End
+            const radius = Math.min(h / 2, 20 * scale); // Cap radius
+            roundRect(x, y, w, h, radius);
+        }
+
+        function drawParallelogram(x, y, w, h) {
+            // Parallelogram for Input/Output
+            const skew = h * 0.2; // 20% skew
+            ctx.beginPath();
+            ctx.moveTo(x + skew, y);
+            ctx.lineTo(x + w, y);
+            ctx.lineTo(x + w - skew, y + h);
+            ctx.lineTo(x, y + h);
+            ctx.closePath();
+        }
+
+        function drawDocument(x, y, w, h) {
+            // Document: Rectangle with wavy bottom
+            const waveHeight = h * 0.1;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + w, y);
+            ctx.lineTo(x + w, y + h - waveHeight);
+            // Wavy bottom with bezier curves
+            ctx.bezierCurveTo(
+                x + w * 0.75, y + h - waveHeight * 2,
+                x + w * 0.5, y + h,
+                x + w * 0.25, y + h - waveHeight
+            );
+            ctx.bezierCurveTo(
+                x + w * 0.125, y + h - waveHeight * 1.5,
+                x, y + h,
+                x, y + h - waveHeight
+            );
+            ctx.lineTo(x, y);
+            ctx.closePath();
+        }
+
+        function drawCylinder(x, y, w, h) {
+            // Cylinder for Database
+            const ellipseHeight = h * 0.15;
+            
+            // Draw the body rectangle first
+            ctx.beginPath();
+            ctx.moveTo(x, y + ellipseHeight);
+            ctx.lineTo(x, y + h - ellipseHeight);
+            ctx.lineTo(x + w, y + h - ellipseHeight);
+            ctx.lineTo(x + w, y + ellipseHeight);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Draw the side strokes
+            ctx.beginPath();
+            ctx.moveTo(x, y + ellipseHeight);
+            ctx.lineTo(x, y + h - ellipseHeight);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(x + w, y + ellipseHeight);
+            ctx.lineTo(x + w, y + h - ellipseHeight);
+            ctx.stroke();
+            
+            // Draw bottom ellipse (visible arc)
+            ctx.beginPath();
+            ctx.ellipse(x + w / 2, y + h - ellipseHeight, w / 2, ellipseHeight, 0, 0, Math.PI);
+            ctx.stroke();
+            
+            // Draw top ellipse (full, overwrites top of body)
+            ctx.beginPath();
+            ctx.ellipse(x + w / 2, y + ellipseHeight, w / 2, ellipseHeight, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+        }
+
+        function drawSubprocess(x, y, w, h) {
+            // Subprocess: Rectangle with double vertical lines
+            roundRect(x, y, w, h, 5 * scale);
+            // Draw inner vertical lines
+            const inset = 8 * scale;
+            ctx.beginPath();
+            ctx.moveTo(x + inset, y);
+            ctx.lineTo(x + inset, y + h);
+            ctx.moveTo(x + w - inset, y);
+            ctx.lineTo(x + w - inset, y + h);
+            ctx.stroke();
+        }
+
+        function drawTrapezoid(x, y, w, h) {
+            // Trapezoid for Manual Operation
+            const topInset = h * 0.25;
+            ctx.beginPath();
+            ctx.moveTo(x + topInset, y);
+            ctx.lineTo(x + w - topInset, y);
+            ctx.lineTo(x + w, y + h);
+            ctx.lineTo(x, y + h);
+            ctx.closePath();
+        }
+
+
+        function getConnectionPoint(node, targetX, targetY) {
+            // Calculates connection point in WORLD coordinates
+            const dx = targetX - node.x;
+            const dy = targetY - node.y;
+            const angle = Math.atan2(dy, dx);
+            let point = { x: node.x, y: node.y };
+
+            // Most shapes use rectangular bounding box logic
+            if (['process', 'terminator', 'io', 'document', 'subprocess', 'manual', 'database'].includes(node.type)) {
+                const h = node.h / 2;
+                const w = node.w / 2;
+                if (Math.abs(dx * h) > Math.abs(dy * w)) {
+                    point.x = node.x + (dx > 0 ? w : -w);
+                    point.y = node.y + (dx > 0 ? w * dy / dx : -w * dy / dx);
+                } else {
+                    point.y = node.y + (dy > 0 ? h : -h);
+                    point.x = node.x + (dy > 0 ? h * dx / dy : -h * dx / dy);
+                }
+            } else if (node.type === 'decision') {
+                // Diamond shape connection points
+                const h = node.h / 2;
+                const w = node.w / 2;
+                const absAngle = Math.abs(angle);
+
+                if (absAngle < Math.PI / 4 || absAngle > 3 * Math.PI / 4) {
+                    point.x = node.x + (dx > 0 ? w : -w);
+                    point.y = node.y + (dx > 0 ? w * Math.tan(angle) : -w * Math.tan(angle));
+                } else {
+                    point.y = node.y + (dy > 0 ? h : -h);
+                    point.x = node.x + (dy > 0 ? h / Math.tan(angle) : -h / Math.tan(angle));
+                }
+                point.x = Math.max(node.x - w, Math.min(node.x + w, point.x));
+                point.y = Math.max(node.y - h, Math.min(node.y + h, point.y));
+            }
+            return point;
+        }
+
+        // --- Core Drawing Function ---
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Line thickness scales with zoom for better visibility
+            const effectiveLineWidth = CONFIG.LINE_WIDTH * scale;
+            
+            // World unit sizes for proportional scaling
+            const worldLabelFontSize = CONFIG.WORLD_LABEL_FONT_SIZE;
+            const scaledLabelFontSize = worldLabelFontSize * scale; 
+            const worldPadding = 4; 
+            const scaledPadding = worldPadding * scale; 
+
+            // Draw Static Connections
+            ctx.lineWidth = effectiveLineWidth;
+            ctx.setLineDash([]); // Ensure solid lines
+
+            connections.forEach(conn => {
+                // Determine color based on selection/hover state
+                const isHovered = conn === hoveredConnection;
+                const isSelected = conn === selectedConnection;
+                // KPMG Colors: Dark Blue (selected), Cobalt (hovered), KPMG Blue (normal)
+                const lineColor = isSelected ? '#0C233C' : (isHovered ? '#1E49E2' : '#00338D'); 
+                const lineWidth = isSelected || isHovered ? effectiveLineWidth * 1.5 : effectiveLineWidth;
+
+                // Get geometry data in WORLD coordinates. 
+                const geometry = getLabelGeometry(conn, worldLabelFontSize); 
+                if (!geometry) return; 
+
+                const { startPoint, endPoint, midX, midY, textWidth, textHeight } = geometry;
+                
+                // Translate world coordinates to screen coordinates
+                const screenStart = worldToScreen(startPoint.x, startPoint.y);
+                const screenEnd = worldToScreen(endPoint.x, endPoint.y);
+                const screenMid = worldToScreen(midX, midY);
+
+                // Draw the line
+                ctx.strokeStyle = lineColor; 
+                ctx.lineWidth = lineWidth;
+                ctx.beginPath();
+                ctx.moveTo(screenStart.x, screenStart.y);
+                ctx.lineTo(screenEnd.x, screenEnd.y);
+                ctx.stroke();
+
+                drawArrowhead(screenStart.x, screenStart.y, screenEnd.x, screenEnd.y, lineColor);
+
+                // Draw connection label ONLY if text exists AND we are NOT currently editing this label
+                if (conn.label && conn.label.trim() !== '' && conn !== editingLabel) { 
+                    
+                    // --- Proportional Label Text Scaling ---
+                    ctx.font = `${scaledLabelFontSize}px Inter`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    // Text width and height are from WORLD units, so they must be scaled here
+                    const scaledTextWidth = textWidth * scale;
+                    const scaledTextHeight = textHeight * scale;
+
+                    // Draw white background box (all dimensions are scaled)
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(
+                        screenMid.x - scaledTextWidth / 2 - scaledPadding, 
+                        screenMid.y - scaledTextHeight / 2 - scaledPadding, 
+                        scaledTextWidth + 2 * scaledPadding, 
+                        scaledTextHeight + 2 * scaledPadding
+                    );
+                    
+                    // Draw the text with KPMG Dark Blue
+                    ctx.fillStyle = '#0C233C';
+                    ctx.fillText(conn.label, screenMid.x, screenMid.y);
+                }
+            });
+
+            // Draw Groups (background for grouped nodes)
+            groups.forEach(group => {
+                if (group.nodeIds.length === 0) return;
+                
+                const groupNodes = nodes.filter(n => group.nodeIds.includes(n.id));
+                if (groupNodes.length === 0) return;
+                
+                // Calculate bounding box for group in world coordinates
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                groupNodes.forEach(node => {
+                    const left = node.x - node.w / 2;
+                    const right = node.x + node.w / 2;
+                    const top = node.y - node.h / 2;
+                    const bottom = node.y + node.h / 2;
+                    
+                    minX = Math.min(minX, left);
+                    maxX = Math.max(maxX, right);
+                    minY = Math.min(minY, top);
+                    maxY = Math.max(maxY, bottom);
+                });
+                
+                // Add padding in world units
+                const padding = 20;
+                minX -= padding;
+                minY -= padding;
+                maxX += padding;
+                maxY += padding;
+                
+                // Convert to screen coordinates
+                const topLeft = worldToScreen(minX, minY);
+                const bottomRight = worldToScreen(maxX, maxY);
+                const screenWidth = bottomRight.x - topLeft.x;
+                const screenHeight = bottomRight.y - topLeft.y;
+                
+                // Draw group boundary
+                const isSelected = selectedGroup === group;
+                const cornerRadius = 15 * scale;
+                
+                // Semi-transparent fill
+                ctx.fillStyle = group.color + '20'; // 20 = ~12% opacity
+                ctx.strokeStyle = group.color;
+                ctx.lineWidth = isSelected ? 3 * scale : 2 * scale;
+                ctx.setLineDash(isSelected ? [] : [10 * scale, 5 * scale]); // Solid if selected, dashed otherwise
+                
+                // Draw rounded rectangle
+                ctx.beginPath();
+                ctx.roundRect(topLeft.x, topLeft.y, screenWidth, screenHeight, cornerRadius);
+                ctx.fill();
+                ctx.stroke();
+                ctx.setLineDash([]); // Reset
+                
+                // Draw group name label
+                const labelFontSize = 14 * scale;
+                ctx.font = `bold ${labelFontSize}px Inter`;
+                ctx.fillStyle = group.color;
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+                
+                // Position label at top-left with padding
+                const labelPadding = 5 * scale;
+                ctx.fillText(group.name, topLeft.x + labelPadding, topLeft.y + labelPadding);
+            });
+
+            // Draw temporary connection line if in connecting mode
+            if (isConnecting && connectionStartNode) {
+                const targetWorldPos = screenToWorld(currentMousePos.x, currentMousePos.y);
+                const startPoint = getConnectionPoint(connectionStartNode, targetWorldPos.x, targetWorldPos.y);
+                const screenStart = worldToScreen(startPoint.x, startPoint.y);
+                
+                ctx.strokeStyle = '#0C233C'; // KPMG Dark Blue for connecting line
+                ctx.lineWidth = effectiveLineWidth;
+                ctx.setLineDash([5 * scale, 5 * scale]); // Dashed line scales with zoom
+                
+                ctx.beginPath();
+                ctx.moveTo(screenStart.x, screenStart.y);
+                ctx.lineTo(currentMousePos.x, currentMousePos.y); 
+                ctx.stroke();
+
+                ctx.setLineDash([]); // Reset line dash
+                drawArrowhead(screenStart.x, screenStart.y, currentMousePos.x, currentMousePos.y, '#0C233C');
+            }
+
+            // Draw Nodes
+            nodes.forEach(node => {
+                const isCurrent = (node === selectedNode || node === connectionStartNode);
+                const isMultiSelected = selectedNodes.includes(node);
+                
+                // Translate world coordinates to screen coordinates
+                const screen = worldToScreen(node.x, node.y);
+                const screenX = screen.x;
+                const screenY = screen.y;
+                const screenW = node.w * scale; // Scale width
+                const screenH = node.h * scale; // Scale height
+                
+                // Set styles with KPMG colors
+                // Multi-selected: Orange accent, Dark Blue border with thicker width
+                // Selected: Sky Blue fill, Dark Blue border
+                // Normal: Light Blue fill, KPMG Blue border
+                if (isMultiSelected) {
+                    ctx.fillStyle = '#FFB547'; // Orange accent for multi-select
+                    ctx.strokeStyle = '#0C233C'; // KPMG Dark Blue
+                    ctx.lineWidth = 4 * scale;
+                } else if (isCurrent) {
+                    ctx.fillStyle = '#76D2FF'; // Sky Blue
+                    ctx.strokeStyle = '#0C233C'; // KPMG Dark Blue
+                    ctx.lineWidth = 4 * scale;
+                } else {
+                    ctx.fillStyle = '#ACEAFF'; // Light Blue
+                    ctx.strokeStyle = '#00338D'; // KPMG Blue
+                    ctx.lineWidth = 2 * scale;
+                }
+                
+                // Draw Shape (using scaled dimensions)
+                if (node.type === 'process') {
+                    roundRect(screenX - screenW / 2, screenY - screenH / 2, screenW, screenH, 10 * scale);
+                    ctx.fill();
+                    ctx.stroke();
+                } else if (node.type === 'decision') {
+                    drawDiamond(screenX, screenY, screenW, screenH);
+                    ctx.fill();
+                    ctx.stroke();
+                } else if (node.type === 'terminator') {
+                    drawTerminator(screenX - screenW / 2, screenY - screenH / 2, screenW, screenH);
+                    ctx.fill();
+                    ctx.stroke();
+                } else if (node.type === 'io') {
+                    drawParallelogram(screenX - screenW / 2, screenY - screenH / 2, screenW, screenH);
+                    ctx.fill();
+                    ctx.stroke();
+                } else if (node.type === 'document') {
+                    drawDocument(screenX - screenW / 2, screenY - screenH / 2, screenW, screenH);
+                    ctx.fill();
+                    ctx.stroke();
+                } else if (node.type === 'database') {
+                    // Database uses special drawing that includes fill/stroke
+                    drawCylinder(screenX - screenW / 2, screenY - screenH / 2, screenW, screenH);
+                } else if (node.type === 'subprocess') {
+                    drawSubprocess(screenX - screenW / 2, screenY - screenH / 2, screenW, screenH);
+                    ctx.fill();
+                    ctx.stroke();
+                } else if (node.type === 'manual') {
+                    drawTrapezoid(screenX - screenW / 2, screenY - screenH / 2, screenW, screenH);
+                    ctx.fill();
+                    ctx.stroke();
+                }
+
+                // Draw Text ONLY if we are NOT currently editing this node
+                if (node !== editingNode) {
+                    
+                    // --- Dynamic Text Fit Logic with Multi-line Support ---
+                    const maxWorldTextWidth = node.w * 0.85; // Max 85% of node width (in world units)
+                    const maxWorldTextHeight = node.h * 0.85; // Max 85% of node height
+                    let worldFontSize = CONFIG.WORLD_MAX_NODE_FONT_SIZE; // Start high in world units
+                    let finalScaledFontSize = CONFIG.WORLD_MAX_NODE_FONT_SIZE * scale;
+                    let finalLines = [];
+
+                    // Iteratively find the largest font size that fits both width and height
+                    while (worldFontSize >= CONFIG.WORLD_MIN_NODE_FONT_SIZE) { 
+                        const currentScaledFontSize = worldFontSize * scale; 
+                        ctx.font = `${currentScaledFontSize}px Inter`;
+                        
+                        // Wrap text into lines
+                        const lines = wrapText(node.text, maxWorldTextWidth * scale, currentScaledFontSize);
+                        const lineHeight = currentScaledFontSize * 1.2;
+                        const totalHeight = lines.length * lineHeight;
+                        
+                        // Check if text fits both width and height
+                        if (totalHeight <= maxWorldTextHeight * scale) {
+                            finalScaledFontSize = currentScaledFontSize;
+                            finalLines = lines;
+                            break; 
+                        }
+                        worldFontSize--; 
+                    }
+                    
+                    // If no fit found, use minimum font size
+                    if (finalLines.length === 0) {
+                        const minScaledFontSize = CONFIG.WORLD_MIN_NODE_FONT_SIZE * scale;
+                        ctx.font = `${minScaledFontSize}px Inter`;
+                        finalLines = wrapText(node.text, maxWorldTextWidth * scale, minScaledFontSize);
+                        finalScaledFontSize = minScaledFontSize;
+                    }
+                    // --- END Dynamic Text Fit Logic ---
+
+                    ctx.font = `${finalScaledFontSize}px Inter`;
+                    ctx.fillStyle = '#0C233C'; // KPMG Dark Blue for text
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    // Draw multi-line text
+                    const lineHeight = finalScaledFontSize * 1.2;
+                    drawMultilineText(finalLines, screenX, screenY, lineHeight);
+                }
+            });
+            
+            // Draw resize handles for selected node
+            if (selectedNode && !editingNode) {
+                drawResizeHandles(selectedNode);
+            }
+            
+            requestAnimationFrame(draw);
+        }
+
+        // --- Resize Handle Functions ---
+
+        /**
+         * Draw resize handles around a node
+         */
+        function drawResizeHandles(node) {
+            const screen = worldToScreen(node.x, node.y);
+            const screenW = node.w * scale;
+            const screenH = node.h * scale;
+            const handleSize = CONFIG.RESIZE_HANDLE_SIZE;
+            
+            const left = screen.x - screenW / 2;
+            const right = screen.x + screenW / 2;
+            const top = screen.y - screenH / 2;
+            const bottom = screen.y + screenH / 2;
+            const centerX = screen.x;
+            const centerY = screen.y;
+            
+            // Handle positions: [x, y]
+            const handles = [
+                [left, top],           // nw
+                [right, top],          // ne
+                [left, bottom],        // sw
+                [right, bottom],       // se
+                [centerX, top],        // n
+                [centerX, bottom],     // s
+                [left, centerY],       // w
+                [right, centerY],      // e
+            ];
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.strokeStyle = '#00338D'; // KPMG Blue
+            ctx.lineWidth = 2;
+            
+            handles.forEach(([x, y]) => {
+                ctx.fillRect(x - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
+                ctx.strokeRect(x - handleSize / 2, y - handleSize / 2, handleSize, handleSize);
+            });
+        }
+
+        /**
+         * Check if a point (screen coordinates) is on a resize handle
+         * Returns handle name or null
+         */
+        function getResizeHandle(node, screenX, screenY) {
+            if (!node) return null;
+            
+            const screen = worldToScreen(node.x, node.y);
+            const screenW = node.w * scale;
+            const screenH = node.h * scale;
+            const handleSize = CONFIG.RESIZE_HANDLE_SIZE;
+            const threshold = handleSize / 2 + 2; // A bit larger for easier clicking
+            
+            const left = screen.x - screenW / 2;
+            const right = screen.x + screenW / 2;
+            const top = screen.y - screenH / 2;
+            const bottom = screen.y + screenH / 2;
+            const centerX = screen.x;
+            const centerY = screen.y;
+            
+            // Check each handle
+            const handles = {
+                'nw': [left, top],
+                'ne': [right, top],
+                'sw': [left, bottom],
+                'se': [right, bottom],
+                'n': [centerX, top],
+                's': [centerX, bottom],
+                'w': [left, centerY],
+                'e': [right, centerY],
+            };
+            
+            for (const [name, [hx, hy]] of Object.entries(handles)) {
+                const dx = screenX - hx;
+                const dy = screenY - hy;
+                if (Math.abs(dx) <= threshold && Math.abs(dy) <= threshold) {
+                    return name;
+                }
+            }
+            
+            return null;
+        }
+
+        /**
+         * Get cursor style for resize handle
+         */
+        function getResizeCursor(handle) {
+            const cursors = {
+                'nw': 'nw-resize',
+                'ne': 'ne-resize',
+                'sw': 'sw-resize',
+                'se': 'se-resize',
+                'n': 'n-resize',
+                's': 's-resize',
+                'w': 'w-resize',
+                'e': 'e-resize',
+            };
+            return cursors[handle] || 'default';
+        }
+
+        /**
+         * Resize a node based on handle and mouse position
+         */
+        function resizeNode(node, handle, worldMouseX, worldMouseY) {
+            const originalX = resizeStartNode.x;
+            const originalY = resizeStartNode.y;
+            const originalW = resizeStartNode.w;
+            const originalH = resizeStartNode.h;
+            
+            const deltaX = worldMouseX - resizeStartMouse.x;
+            const deltaY = worldMouseY - resizeStartMouse.y;
+            
+            let newX = originalX;
+            let newY = originalY;
+            let newW = originalW;
+            let newH = originalH;
+            
+            // Apply resize based on handle
+            if (handle.includes('e')) {
+                newW = Math.max(CONFIG.MIN_NODE_WIDTH, originalW + deltaX);
+            }
+            if (handle.includes('w')) {
+                const change = Math.min(deltaX, originalW - CONFIG.MIN_NODE_WIDTH);
+                newW = originalW - change;
+                newX = originalX + change / 2;
+            }
+            if (handle.includes('s')) {
+                newH = Math.max(CONFIG.MIN_NODE_HEIGHT, originalH + deltaY);
+            }
+            if (handle.includes('n')) {
+                const change = Math.min(deltaY, originalH - CONFIG.MIN_NODE_HEIGHT);
+                newH = originalH - change;
+                newY = originalY + change / 2;
+            }
+            
+            // Apply snap to grid if enabled
+            if (snapToGrid) {
+                newW = snapToGridCoord(newW);
+                newH = snapToGridCoord(newH);
+                newX = snapToGridCoord(newX);
+                newY = snapToGridCoord(newY);
+            }
+            
+            node.x = newX;
+            node.y = newY;
+            node.w = newW;
+            node.h = newH;
+        }
+
+        // --- Deletion Logic ---
+
+        function deleteSelected() {
+            if (selectedNode) {
+                // Capture state for undo BEFORE deletion
+                captureState();
+                
+                // 1. Get the ID of the node to delete
+                const nodeIdToDelete = selectedNode.id;
+
+                // 2. Remove all connections related to this node
+                for (let i = connections.length - 1; i >= 0; i--) {
+                    const conn = connections[i];
+                    if (conn.from === nodeIdToDelete || conn.to === nodeIdToDelete) {
+                        connections.splice(i, 1);
+                    }
+                }
+
+                // 3. Remove the node itself
+                const nodeIndex = nodes.findIndex(n => n.id === nodeIdToDelete);
+                if (nodeIndex !== -1) {
+                    nodes.splice(nodeIndex, 1);
+                }
+
+                messageBox(`✓ Deleted block: ${selectedNode.text}`);
+                selectedNode = null; // Deselect
+                
+                // Capture state AFTER deletion
+                captureState();
+                
+            } else if (selectedConnection) {
+                // Capture state for undo BEFORE deletion
+                captureState();
+                
+                // Try to find by reference first
+                let index = connections.indexOf(selectedConnection);
+                
+                // If not found by reference, try matching by properties
+                if (index === -1) {
+                    for (let i = 0; i < connections.length; i++) {
+                        if (connections[i].from === selectedConnection.from && 
+                            connections[i].to === selectedConnection.to) {
+                            // Match by from/to only
+                            index = i;
+                            break;
+                        }
+                    }
+                }
+                
+                if (index !== -1) {
+                    const connLabel = selectedConnection.label || 'unlabeled';
+                    connections.splice(index, 1);
+                    messageBox(`✓ Deleted connection: ${connLabel} (${selectedConnection.from}→${selectedConnection.to})`);
+                    selectedConnection = null; // Deselect
+                    hoveredConnection = null; // Clear hover state too
+                    
+                    // Capture state AFTER deletion
+                    captureState();
+                } else {
+                    messageBox('⚠ Error: Could not find connection to delete');
+                }
+            } else {
+                messageBox('⚠ Nothing selected. Click on a block or arrow first.');
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            // Skip global shortcuts if editing in text areas
+            const isEditingText = nodeEditor.style.display === 'block' 
+                               || jsonImportModal.style.display === 'block'
+                               || exportModal.style.display === 'block';
+            
+            // Check for Delete or Backspace key, but not if text editor or modal is open
+            if ((e.key === 'Delete' || e.key === 'Backspace') && !isEditingText) {
+                e.preventDefault(); // Prevent browser navigation/backspace behavior
+                deleteSelected();
+            }
+            
+            // Undo/Redo shortcuts
+            if (e.ctrlKey && e.key === 'z' && !e.shiftKey && !isEditingText) {
+                e.preventDefault();
+                undo();
+            }
+            if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'Z')) {
+                if (!isEditingText) {
+                    e.preventDefault();
+                    redo();
+                }
+            }
+            
+            // Export shortcut - allow even in modals since it's safe
+            if (e.ctrlKey && e.key === 's' && jsonImportModal.style.display !== 'block') {
+                e.preventDefault();
+                showExportModal();
+            }
+            
+            // Snap to grid toggle
+            if (e.key === 'g' && !isEditingText) {
+                toggleSnapToGrid();
+            }
+            
+            // Copy shortcut
+            if (e.ctrlKey && e.key === 'c' && !isEditingText) {
+                e.preventDefault();
+                copyNode();
+            }
+            
+            // Paste shortcut
+            if (e.ctrlKey && e.key === 'v' && !isEditingText) {
+                e.preventDefault();
+                pasteNode(); // Will paste at canvas center if no mouse position
+            }
+            
+            // Duplicate shortcut
+            if (e.ctrlKey && e.key === 'd' && !isEditingText) {
+                e.preventDefault();
+                duplicateNode();
+            }
+            
+            // Alignment shortcuts (Ctrl+Shift+Arrow keys)
+            if (e.ctrlKey && e.shiftKey && !isEditingText) {
+                if (e.key === 'ArrowLeft' || e.key === 'L') {
+                    e.preventDefault();
+                    alignLeft();
+                } else if (e.key === 'ArrowRight' || e.key === 'R') {
+                    e.preventDefault();
+                    alignRight();
+                } else if (e.key === 'ArrowUp' || e.key === 'T') {
+                    e.preventDefault();
+                    alignTop();
+                } else if (e.key === 'ArrowDown' || e.key === 'B') {
+                    e.preventDefault();
+                    alignBottom();
+                } else if (e.key === 'H') {
+                    e.preventDefault();
+                    alignCenterH();
+                } else if (e.key === 'V') {
+                    e.preventDefault();
+                    alignCenterV();
+                } else if (e.key === 'G') {
+                    e.preventDefault();
+                    ungroup(); // Ctrl+Shift+G = Ungroup
+                }
+            }
+            
+            // Group shortcut (Ctrl+G)
+            if (e.ctrlKey && e.key === 'g' && !e.shiftKey && !isEditingText) {
+                e.preventDefault();
+                createGroup();
+            }
+        });
+
+
+        // --- Interaction Logic (Point Detection) ---
+        
+        /**
+         * Calculates the geometry needed for a connection label's bounding box in WORLD coordinates.
+         */
+        function getLabelGeometry(conn, worldFontSize) {
+            const fromNode = nodes.find(n => n.id === conn.from);
+            const toNode = nodes.find(n => n.id === conn.to);
+            if (!fromNode || !toNode) return null;
+
+            const fromCenter = { x: fromNode.x, y: fromNode.y };
+            const toCenter = { x: toNode.x, y: toNode.y };
+            
+            const endPoint = getConnectionPoint(toNode, fromCenter.x, fromCenter.y);
+            const startPoint = getConnectionPoint(fromNode, toCenter.x, toCenter.y);
+
+            const midX = (startPoint.x + endPoint.x) / 2;
+            const midY = (startPoint.y + endPoint.y) / 2;
+
+            // Measure text for accurate hit detection, using the world font size (14px) 
+            ctx.font = `${worldFontSize}px Inter`;
+            const labelText = conn.label && conn.label.trim() !== '' ? conn.label : '...'; 
+            
+            const textMetrics = ctx.measureText(labelText);
+            const textWidth = textMetrics.width;
+            const textHeight = worldFontSize; 
+            
+            // textWidth and textHeight are measured using the font at 1.0 scale (i.e., world units)
+            return { conn, startPoint, endPoint, midX, midY, textWidth, textHeight: textHeight * 1.2 }; 
+        }
+
+        /**
+         * Checks if a point (worldX, worldY) is inside a node.
+         */
+        function isPointInNode(node, worldX, worldY) {
+            // Simple bounding box check for most shapes
+            const inBoundingBox = worldX >= node.x - node.w / 2 && worldX <= node.x + node.w / 2 &&
+                                  worldY >= node.y - node.h / 2 && worldY <= node.y + node.h / 2;
+            
+            // For most shapes, bounding box is sufficient
+            if (['process', 'terminator', 'io', 'document', 'subprocess', 'manual', 'database'].includes(node.type)) {
+                return inBoundingBox;
+            }
+            
+            // Decision (diamond) needs precise detection
+            if (node.type === 'decision') {
+                if (!inBoundingBox) return false;
+                const w = node.w / 2;
+                const h = node.h / 2;
+                const normalizedX = Math.abs(worldX - node.x);
+                const normalizedY = Math.abs(worldY - node.y);
+                return (normalizedX / w + normalizedY / h) <= 1.05; 
+            }
+            
+            return inBoundingBox;
+        }
+
+        /**
+         * Checks if a point (worldX, worldY) is near a connection label for editing/selection.
+         * @returns {Object|null} An object containing the connection and position data if near a label.
+         */
+        function isPointNearConnectionLabel(worldX, worldY) {
+            // The effective clickable area (padding) should be based on the unscaled world size
+            const worldClickPadding = CONFIG.CLICK_THRESHOLD_LABEL; // Increased padding to make selection easier
+
+            for (const conn of connections) {
+                // Get geometry using the world font size (14) to get dimensions in world units.
+                const target = getLabelGeometry(conn, CONFIG.WORLD_LABEL_FONT_SIZE); 
+                if (!target) continue;
+                
+                const { midX, midY, textWidth, textHeight } = target;
+
+                // Check if point (worldX, worldY) is inside the bounding box of the label
+                if (worldX >= midX - textWidth / 2 - worldClickPadding && 
+                    worldX <= midX + textWidth / 2 + worldClickPadding && 
+                    worldY >= midY - textHeight / 2 - worldClickPadding && 
+                    worldY <= midY + textHeight / 2 + worldClickPadding) {
+                    
+                    return target; // Return the geometry object
+                }
+            }
+            return null;
+        }
+
+        /**
+         * Checks if a point is near any connection line (not just the label).
+         * This makes it easier to select connections for deletion.
+         * @returns {Object|null} Connection object if near a line.
+         */
+        function isPointNearConnectionLine(worldX, worldY) {
+            const clickThreshold = CONFIG.CLICK_THRESHOLD_LINE; // World units threshold for clicking near a line
+
+            for (const conn of connections) {
+                const fromNode = nodes.find(n => n.id === conn.from);
+                const toNode = nodes.find(n => n.id === conn.to);
+                if (!fromNode || !toNode) continue;
+
+                const fromCenter = { x: fromNode.x, y: fromNode.y };
+                const toCenter = { x: toNode.x, y: toNode.y };
+                
+                const endPoint = getConnectionPoint(toNode, fromCenter.x, fromCenter.y);
+                const startPoint = getConnectionPoint(fromNode, toCenter.x, toCenter.y);
+
+                // Calculate distance from point to line segment
+                const distance = distanceToLineSegment(worldX, worldY, startPoint.x, startPoint.y, endPoint.x, endPoint.y);
+                
+                if (distance <= clickThreshold) {
+                    // Return geometry for consistency with label hit
+                    return getLabelGeometry(conn, CONFIG.WORLD_LABEL_FONT_SIZE);
+                }
+            }
+            return null;
+        }
+
+        /**
+         * Calculate the perpendicular distance from a point to a line segment.
+         */
+        function distanceToLineSegment(px, py, x1, y1, x2, y2) {
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const lengthSquared = dx * dx + dy * dy;
+            
+            if (lengthSquared === 0) {
+                // Line segment is actually a point
+                return Math.sqrt((px - x1) * (px - x1) + (py - y1) * (py - y1));
+            }
+            
+            // Calculate projection of point onto line segment (clamped to [0,1])
+            let t = ((px - x1) * dx + (py - y1) * dy) / lengthSquared;
+            t = Math.max(0, Math.min(1, t));
+            
+            // Find closest point on segment
+            const closestX = x1 + t * dx;
+            const closestY = y1 + t * dy;
+            
+            // Return distance to closest point
+            return Math.sqrt((px - closestX) * (px - closestX) + (py - closestY) * (py - closestY));
+        }
+
+        // --- Text Editing Implementation (mostly unchanged) ---
+
+        /**
+         * Positions and shows the input field over the selected node or connection label.
+         */
+        function showEditor(target) {
+            hideEditor(); // Ensure any previous editor is closed
+            
+            let text, width, height, worldX, worldY, fontSize;
+
+            if (target.id !== undefined) { // It's a Node
+                editingNode = target;
+                text = target.text;
+                width = target.w;
+                height = target.h;
+                fontSize = CONFIG.WORLD_MAX_NODE_FONT_SIZE; // Use max font size for the editor
+                // Calculate world position of the top-left corner
+                worldX = target.x - target.w / 2;
+                worldY = target.y - target.h / 2;
+                selectedNode = target; // Ensure it's selected while editing
+                selectedConnection = null;
+            } else { // It's a Connection Label object ({ conn, midX, midY, ... })
+                editingLabel = target.conn;
+                text = target.conn.label || '';
+                // Use the calculated world text width/height for the editor dimensions + padding
+                width = target.textWidth + 20; 
+                height = target.textHeight + 8; 
+                fontSize = CONFIG.WORLD_LABEL_FONT_SIZE; // Use world label font size
+                // Calculate world position of the top-left corner
+                worldX = target.midX - width / 2;
+                worldY = target.midY - height / 2;
+                selectedConnection = target.conn; // Ensure it's selected while editing
+                selectedNode = null;
+            }
+            
+            nodeEditor.value = text;
+            
+            // Translate world position to screen position, and scale dimensions
+            const screenPos = worldToScreen(worldX, worldY);
+            const screenWidth = width * scale;
+            const screenHeight = height * scale;
+
+            // Apply styles and position
+            nodeEditor.style.display = 'block';
+            nodeEditor.style.width = `${screenWidth}px`;
+            nodeEditor.style.height = `${screenHeight}px`;
+            nodeEditor.style.lineHeight = 'normal'; // Allow natural line height for multi-line
+            nodeEditor.style.left = `${screenPos.x}px`;
+            nodeEditor.style.top = `${screenPos.y}px`;
+            // Keep editor font size scaled with the blocks for compatibility
+            nodeEditor.style.fontSize = `${fontSize * scale}px`; 
+            
+            nodeEditor.focus();
+            nodeEditor.select();
+        }
+
+        /**
+         * Hides the input field and saves the content back.
+         */
+        function hideEditor() {
+            if (editingNode) {
+                const defaultText = editingNode.type === 'decision' ? 'Decision' : 'Process';
+                const newText = nodeEditor.value.trim() || defaultText;
+                if (newText !== editingNode.text) {
+                    captureState(); // Capture state before change
+                    editingNode.text = newText;
+                    captureState(); // Capture state after change
+                }
+                editingNode = null;
+            } else if (editingLabel) {
+                const newLabel = nodeEditor.value.trim();
+                if (newLabel !== editingLabel.label) {
+                    captureState(); // Capture state before change
+                    editingLabel.label = newLabel;
+                    captureState(); // Capture state after change
+                }
+                editingLabel = null;
+            }
+            nodeEditor.style.display = 'none';
+        }
+
+        // Input field listeners (blur/enter/escape to save/hide)
+        nodeEditor.addEventListener('blur', hideEditor);
+        nodeEditor.addEventListener('keydown', (e) => {
+            // Ctrl+Enter or Shift+Enter to save and close
+            if (e.key === 'Enter' && (e.ctrlKey || e.shiftKey)) {
+                e.preventDefault();
+                hideEditor();
+                canvas.focus(); 
+            }
+            // Enter alone adds a new line (default textarea behavior)
+            // No need to handle - textarea does this naturally
+            
+            if (e.key === 'Escape') {
+                // Revert text to original on escape
+                if (editingNode) nodeEditor.value = editingNode.text;
+                if (editingLabel) nodeEditor.value = editingLabel.label || '';
+                hideEditor();
+                canvas.focus();
+            }
+            // Stop keydown events from bubbling up and triggering canvas deletion logic while editing
+            e.stopPropagation(); 
+        });
+
+        // Double-click listener for text editing
+        canvas.addEventListener('dblclick', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseScreenX = e.clientX - rect.left;
+            const mouseScreenY = e.clientY - rect.top;
+            const worldPos = screenToWorld(mouseScreenX, mouseScreenY);
+            
+            // 1. Check for group label editing first
+            const groupLabelHit = isPointNearGroupLabel(worldPos.x, worldPos.y);
+            if (groupLabelHit) {
+                startEditingGroupName(groupLabelHit);
+                return;
+            }
+            
+            // 2. Check for connection label editing
+            const labelHit = isPointNearConnectionLabel(worldPos.x, worldPos.y);
+            if (labelHit) {
+                showEditor(labelHit);
+                return;
+            }
+
+            // 3. Check for node editing
+            for (let i = nodes.length - 1; i >= 0; i--) {
+                const node = nodes[i];
+                if (isPointInNode(node, worldPos.x, worldPos.y)) {
+                    showEditor(node);
+                    return;
+                }
+            }
+        });
+
+        // --- Mouse Event Listeners (Updated for Selection and Dragging) ---
+
+        canvas.addEventListener('mousedown', (e) => {
+            // Only use left click (button 0) for dragging and selection logic
+            if (e.button !== 0) return;
+
+            hideEditor(); 
+            const rect = canvas.getBoundingClientRect();
+            const mouseScreenX = e.clientX - rect.left;
+            const mouseScreenY = e.clientY - rect.top;
+            
+            const worldPos = screenToWorld(mouseScreenX, mouseScreenY);
+            
+            // DON'T reset selection state here - let mouseup handle it
+
+            // 1. If in connection mode, handle connection start
+            if (isConnecting) {
+                for (let i = nodes.length - 1; i >= 0; i--) {
+                    const node = nodes[i];
+                    if (isPointInNode(node, worldPos.x, worldPos.y)) {
+                        connectionStartNode = node;
+                        messageBox(`Connecting from: ${node.text}... click target node.`);
+                        return;
+                    }
+                }
+                return; 
+            }
+
+            // 2. Check if clicking on a resize handle of the selected node
+            if (selectedNode) {
+                const handle = getResizeHandle(selectedNode, mouseScreenX, mouseScreenY);
+                if (handle) {
+                    isResizing = true;
+                    resizeHandle = handle;
+                    resizeStartNode = { 
+                        x: selectedNode.x, 
+                        y: selectedNode.y, 
+                        w: selectedNode.w, 
+                        h: selectedNode.h 
+                    };
+                    resizeStartMouse = { x: worldPos.x, y: worldPos.y };
+                    canvas.style.cursor = getResizeCursor(handle);
+                    return;
+                }
+            }
+
+            // 3. Handle Node Drag Mode or Multi-Select
+            for (let i = nodes.length - 1; i >= 0; i--) {
+                const node = nodes[i];
+                if (isPointInNode(node, worldPos.x, worldPos.y)) {
+                    // Alt+Click for group selection
+                    if (e.altKey) {
+                        if (selectGroupMembers(node)) {
+                            return;
+                        }
+                    }
+                    
+                    // Ctrl+Click for multi-select
+                    if (e.ctrlKey || e.metaKey) {
+                        const index = selectedNodes.indexOf(node);
+                        if (index === -1) {
+                            selectedNodes.push(node);
+                            messageBox(`✓ Added to selection (${selectedNodes.length} blocks selected)`);
+                        } else {
+                            selectedNodes.splice(index, 1);
+                            messageBox(`✓ Removed from selection (${selectedNodes.length} blocks selected)`);
+                        }
+                        updateAlignmentButtons();
+                        updateGroupButtons();
+                        return;
+                    }
+                    
+                    // Regular click - start dragging
+                    isDragging = true;
+                    selectedNode = node; // Select and start dragging
+                    
+                    // Check if this node is in a group - if so, select the group
+                    const nodeGroup = getNodeGroup(node.id);
+                    if (nodeGroup) {
+                        selectedGroup = nodeGroup;
+                        // Don't change multi-select when clicking a grouped node
+                    } else {
+                        selectedGroup = null;
+                        // If this node is not in selectedNodes, clear multi-selection
+                        if (!selectedNodes.includes(node)) {
+                            selectedNodes = [];
+                            updateAlignmentButtons();
+                        }
+                    }
+                    
+                    updateGroupButtons();
+                    dragOffsetX = worldPos.x - node.x;
+                    dragOffsetY = worldPos.y - node.y;
+                    canvas.style.cursor = 'grabbing';
+                    return; 
+                }
+            }
+            
+            // 4. Prepare for potential canvas dragging (but don't set flag yet)
+            // Only set isCanvasDragging to true when mouse actually moves
+            dragStartX = mouseScreenX;
+            dragStartY = mouseScreenY;
+            canvas.style.cursor = 'all-scroll';
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseScreenX = e.clientX - rect.left;
+            const mouseScreenY = e.clientY - rect.top;
+
+            currentMousePos = { x: mouseScreenX, y: mouseScreenY }; 
+
+            // Check if we should start canvas dragging (mouse moved while not dragging a node or resizing)
+            if (!isDragging && !isResizing && !isCanvasDragging && !isConnecting && e.buttons === 1) {
+                // Mouse is down (buttons === 1) and moved - start canvas drag
+                const dx = Math.abs(mouseScreenX - dragStartX);
+                const dy = Math.abs(mouseScreenY - dragStartY);
+                if (dx > CONFIG.DRAG_THRESHOLD || dy > CONFIG.DRAG_THRESHOLD) { // Require threshold movement to start dragging
+                    isCanvasDragging = true;
+                }
+            }
+
+            if (isCanvasDragging) {
+                // Panning logic
+                const dx = mouseScreenX - dragStartX;
+                const dy = mouseScreenY - dragStartY;
+                canvasOffsetX -= dx / scale; 
+                canvasOffsetY -= dy / scale;
+                dragStartX = mouseScreenX;
+                dragStartY = mouseScreenY;
+
+            } else if (isResizing && selectedNode) {
+                // Resizing logic
+                const worldPos = screenToWorld(mouseScreenX, mouseScreenY);
+                resizeNode(selectedNode, resizeHandle, worldPos.x, worldPos.y);
+
+            } else if (isDragging && selectedNode) {
+                // Node dragging logic
+                const worldPos = screenToWorld(mouseScreenX, mouseScreenY);
+                const newX = worldPos.x - dragOffsetX;
+                const newY = worldPos.y - dragOffsetY;
+                
+                // Calculate delta movement
+                const deltaX = newX - selectedNode.x;
+                const deltaY = newY - selectedNode.y;
+                
+                // Move the main node
+                selectedNode.x = newX;
+                selectedNode.y = newY;
+                
+                // Check if the dragged node is in a group - if so, move entire group
+                const nodeGroup = getNodeGroup(selectedNode.id);
+                if (nodeGroup && selectedGroup === nodeGroup) {
+                    // Move all nodes in the group (except the one we already moved)
+                    nodeGroup.nodeIds.forEach(nodeId => {
+                        const node = nodes.find(n => n.id === nodeId);
+                        if (node && node !== selectedNode) {
+                            node.x += deltaX;
+                            node.y += deltaY;
+                        }
+                    });
+                } else {
+                    // Move all other selected nodes together (multi-select mode)
+                    if (selectedNodes.length > 0) {
+                        selectedNodes.forEach(node => {
+                            if (node !== selectedNode) {
+                                node.x += deltaX;
+                                node.y += deltaY;
+                            }
+                        });
+                    }
+                }
+                
+                // Apply snap to grid if enabled (to main node only, others follow)
+                if (snapToGrid) {
+                    const snappedX = snapToGridCoord(selectedNode.x);
+                    const snappedY = snapToGridCoord(selectedNode.y);
+                    const snapDeltaX = snappedX - selectedNode.x;
+                    const snapDeltaY = snappedY - selectedNode.y;
+                    
+                    selectedNode.x = snappedX;
+                    selectedNode.y = snappedY;
+                    
+                    // Apply snap delta to group or selected nodes
+                    if (nodeGroup && selectedGroup === nodeGroup) {
+                        nodeGroup.nodeIds.forEach(nodeId => {
+                            const node = nodes.find(n => n.id === nodeId);
+                            if (node && node !== selectedNode) {
+                                node.x += snapDeltaX;
+                                node.y += snapDeltaY;
+                            }
+                        });
+                    } else if (selectedNodes.length > 0) {
+                        selectedNodes.forEach(node => {
+                            if (node !== selectedNode) {
+                                node.x += snapDeltaX;
+                                node.y += snapDeltaY;
+                            }
+                        });
+                    }
+                }
+            } else if (!isConnecting) {
+                // Cursor change and hover detection
+                const worldPos = screenToWorld(mouseScreenX, mouseScreenY);
+                
+                let cursorChanged = false;
+                
+                // Check for resize handle hover on selected node
+                if (selectedNode && !editingNode) {
+                    const handle = getResizeHandle(selectedNode, mouseScreenX, mouseScreenY);
+                    if (handle) {
+                        canvas.style.cursor = getResizeCursor(handle);
+                        cursorChanged = true;
+                    }
+                }
+                
+                if (!cursorChanged) {
+                    // Check for group label hover
+                    const groupLabelHit = isPointNearGroupLabel(worldPos.x, worldPos.y);
+                    if (groupLabelHit) {
+                        canvas.style.cursor = 'text';
+                        cursorChanged = true;
+                    }
+                }
+                
+                if (!cursorChanged) {
+                    // Check for connection hover (label first, then line)
+                    hoveredConnection = null;
+                    let labelHit = isPointNearConnectionLabel(worldPos.x, worldPos.y);
+                    if (!labelHit) {
+                        // If not near label, check if near the connection line itself
+                        labelHit = isPointNearConnectionLine(worldPos.x, worldPos.y);
+                    }
+                    
+                    if (labelHit) {
+                        canvas.style.cursor = 'pointer';
+                        hoveredConnection = labelHit.conn;
+                        cursorChanged = true;
+                    } else {
+                        for (let i = nodes.length - 1; i >= 0; i--) {
+                             if (isPointInNode(nodes[i], worldPos.x, worldPos.y)) {
+                                canvas.style.cursor = 'grab';
+                                cursorChanged = true;
+                                break;
+                             }
+                        }
+                    }
+                }
+                
+                if (!cursorChanged) {
+                    canvas.style.cursor = 'default';
+                }
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (e.button !== 0) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const mouseScreenX = e.clientX - rect.left;
+            const mouseScreenY = e.clientY - rect.top;
+            const worldPos = screenToWorld(mouseScreenX, mouseScreenY);
+
+            // 1. Connection logic
+            if (isConnecting && connectionStartNode) {
+                let targetNode = null;
+                for (let i = nodes.length - 1; i >= 0; i--) {
+                    const node = nodes[i];
+                    if (isPointInNode(node, worldPos.x, worldPos.y)) {
+                        targetNode = node;
+                        break;
+                    }
+                }
+
+                if (targetNode) {
+                    // Allow self-connections
+                    const exists = connections.some(c => 
+                        c.from === connectionStartNode.id && c.to === targetNode.id
+                    );
+
+                    if (!exists) {
+                        captureState();
+                        const newConnection = { from: connectionStartNode.id, to: targetNode.id, label: '' };
+                        connections.push(newConnection);
+                        captureState();
+                        const geometry = getLabelGeometry(newConnection, CONFIG.WORLD_LABEL_FONT_SIZE); 
+                        if (geometry) showEditor(geometry);
+                        else messageBox('Connection added. Double-click the line to edit the label.');
+                    } else {
+                         messageBox('Connection already exists between these nodes.');
+                    }
+                }
+                connectionStartNode = null;
+            }
+            
+            // Capture state after node drag or resize
+            if (isDragging && selectedNode) {
+                captureState();
+            }
+            
+            if (isResizing && selectedNode) {
+                captureState();
+                messageBox(`Block resized to ${Math.round(selectedNode.w)}×${Math.round(selectedNode.h)}`);
+            }
+            
+            // 2. Selection logic (only if not dragging/resizing a node/canvas)
+            if (!isDragging && !isResizing && !isCanvasDragging) {
+                // If we clicked, check for node selection
+                let nodeFound = false;
+                for (let i = nodes.length - 1; i >= 0; i--) {
+                    const node = nodes[i];
+                    if (isPointInNode(node, worldPos.x, worldPos.y)) {
+                        // Ctrl+Click handled in mousedown, so this is a regular click
+                        if (!e.ctrlKey && !e.metaKey) {
+                            selectedNode = node;
+                            selectedConnection = null;
+                            
+                            // Clear multi-selection if not Ctrl-clicking
+                            selectedNodes = [];
+                            updateAlignmentButtons();
+                        }
+                        nodeFound = true;
+                        break;
+                    }
+                }
+                
+                // If no node was found, check for connection selection (label or line)
+                if (!nodeFound) {
+                    let labelHit = isPointNearConnectionLabel(worldPos.x, worldPos.y);
+                    if (!labelHit) {
+                        // Check if clicking near the connection line itself
+                        labelHit = isPointNearConnectionLine(worldPos.x, worldPos.y);
+                    }
+                    
+                    if (labelHit) {
+                        selectedConnection = labelHit.conn;
+                        selectedNode = null;
+                        selectedNodes = []; // Clear multi-selection
+                        updateAlignmentButtons();
+                        
+                        // Visual feedback
+                        messageBox(`Arrow selected: ${selectedConnection.from}→${selectedConnection.to}`);
+                    } else {
+                        // Clicked on empty space, deselect all
+                        selectedNode = null;
+                        selectedConnection = null;
+                        selectedNodes = [];
+                        updateAlignmentButtons();
+                    }
+                }
+            }
+            
+            // 3. Reset drag states
+            isDragging = false;
+            isResizing = false;
+            isCanvasDragging = false;
+            resizeHandle = null;
+            canvas.style.cursor = isConnecting ? 'crosshair' : 'default';
+        });
+
+        // --- Node Addition Implementation ---
+        
+        function addNode(type) {
+            hideEditor();
+            captureState(); // Capture state before adding node
+            
+            // Define default sizes and text for each type
+            const nodeDefaults = {
+                process: { w: CONFIG.DEFAULT_PROCESS_WIDTH, h: CONFIG.DEFAULT_PROCESS_HEIGHT, text: 'New Process' },
+                decision: { w: CONFIG.DEFAULT_DECISION_WIDTH, h: CONFIG.DEFAULT_DECISION_HEIGHT, text: 'Decision?' },
+                terminator: { w: CONFIG.DEFAULT_TERMINATOR_WIDTH, h: CONFIG.DEFAULT_TERMINATOR_HEIGHT, text: 'Start' },
+                io: { w: CONFIG.DEFAULT_IO_WIDTH, h: CONFIG.DEFAULT_IO_HEIGHT, text: 'Input/Output' },
+                document: { w: CONFIG.DEFAULT_DOCUMENT_WIDTH, h: CONFIG.DEFAULT_DOCUMENT_HEIGHT, text: 'Document' },
+                database: { w: CONFIG.DEFAULT_DATABASE_WIDTH, h: CONFIG.DEFAULT_DATABASE_HEIGHT, text: 'Database' },
+                subprocess: { w: CONFIG.DEFAULT_SUBPROCESS_WIDTH, h: CONFIG.DEFAULT_SUBPROCESS_HEIGHT, text: 'Subprocess' },
+                manual: { w: CONFIG.DEFAULT_MANUAL_WIDTH, h: CONFIG.DEFAULT_MANUAL_HEIGHT, text: 'Manual Operation' }
+            };
+            
+            const defaults = nodeDefaults[type] || nodeDefaults.process;
+            
+            const newNode = {
+                id: getNextNodeId(),
+                x: canvasOffsetX + canvas.width / 2 / scale, 
+                y: canvasOffsetY + canvas.height / 2 / scale,
+                w: defaults.w,
+                h: defaults.h,
+                type: type,
+                text: defaults.text
+            };
+            nodes.push(newNode);
+
+            selectedNode = newNode; 
+            selectedConnection = null;
+            isDragging = true;
+            dragOffsetX = 0; 
+            dragOffsetY = 0;
+            
+            captureState(); // Capture state after adding node
+        }
+
+        addProcessBtn.addEventListener('click', () => addNode('process'));
+        addDecisionBtn.addEventListener('click', () => addNode('decision'));
+        addTerminatorBtn.addEventListener('click', () => addNode('terminator'));
+        addIOBtn.addEventListener('click', () => addNode('io'));
+        addDocumentBtn.addEventListener('click', () => addNode('document'));
+        addDatabaseBtn.addEventListener('click', () => addNode('database'));
+        addSubprocessBtn.addEventListener('click', () => addNode('subprocess'));
+        addManualBtn.addEventListener('click', () => addNode('manual'));
+
+        // --- Connection Mode Implementation ---
+
+        connectModeBtn.addEventListener('click', () => {
+            isConnecting = !isConnecting;
+            connectionStartNode = null;
+            selectedNode = null;
+            selectedConnection = null;
+            hideEditor();
+            
+            // Update button style and user feedback
+            if (isConnecting) {
+                connectModeBtn.classList.add('connect-active');
+                canvas.style.cursor = 'crosshair';
+                messageBox('Connect Mode ON: Click a starting block, then click a target block.');
+            } else {
+                connectModeBtn.classList.remove('connect-active');
+                canvas.style.cursor = 'default';
+                messageBox('Connect Mode OFF: Drag blocks, double-click to edit, or use wheel to zoom.');
+            }
+        });
+
+        // --- Button Event Listeners ---
+
+        undoBtn.addEventListener('click', undo);
+        redoBtn.addEventListener('click', redo);
+        exportBtn.addEventListener('click', showExportModal);
+        importBtn.addEventListener('click', () => importFile.click());
+        importJsonBtn.addEventListener('click', showJsonImportModal);
+        clearBtn.addEventListener('click', clearCanvas);
+        
+        // Alignment button listeners
+        alignLeftBtn.addEventListener('click', alignLeft);
+        alignRightBtn.addEventListener('click', alignRight);
+        alignTopBtn.addEventListener('click', alignTop);
+        alignBottomBtn.addEventListener('click', alignBottom);
+        alignCenterHBtn.addEventListener('click', alignCenterH);
+        alignCenterVBtn.addEventListener('click', alignCenterV);
+        distributeHBtn.addEventListener('click', distributeHorizontally);
+        distributeVBtn.addEventListener('click', distributeVertically);
+        autoLayoutBtn.addEventListener('click', autoLayout);
+        toggleLayoutBtn.addEventListener('click', toggleLayoutMode);
+        
+        // Group button listeners
+        createGroupBtn.addEventListener('click', createGroup);
+        ungroupBtn.addEventListener('click', ungroup);
+        selectGroupBtn.addEventListener('click', showGroupSelection);
+        
+        importFile.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    importFlowchart(event.target.result);
+                    importFile.value = ''; // Reset file input
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        helpBtn.addEventListener('click', () => {
+            helpModal.style.display = 'block';
+        });
+
+        closeHelp.addEventListener('click', () => {
+            helpModal.style.display = 'none';
+        });
+
+        // Export modal listeners
+        exportConfirmBtn.addEventListener('click', exportFlowchart);
+        
+        exportCancelBtn.addEventListener('click', () => {
+            exportModal.style.display = 'none';
+        });
+        
+        chooseFolderBtn.addEventListener('click', chooseExportFolder);
+        
+        exportFilename.addEventListener('input', updateExportPreview);
+        
+        exportFilename.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                exportFlowchart();
+            }
+            if (e.key === 'Escape') {
+                exportModal.style.display = 'none';
+            }
+        });
+
+        // JSON Import modal listeners
+        jsonImportConfirmBtn.addEventListener('click', importFromJsonText);
+        
+        jsonImportCancelBtn.addEventListener('click', () => {
+            jsonImportModal.style.display = 'none';
+        });
+        
+        jsonImportTextarea.addEventListener('keydown', (e) => {
+            // Only handle specific keys, let everything else work normally
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                jsonImportModal.style.display = 'none';
+                return;
+            }
+            // Allow Ctrl+Enter to import
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                importFromJsonText();
+                return;
+            }
+            // All other keys (Ctrl+V, Ctrl+C, Delete, Backspace, etc.) work normally
+        });
+
+        window.addEventListener('click', (e) => {
+            if (e.target === helpModal) {
+                helpModal.style.display = 'none';
+            }
+            if (e.target === exportModal) {
+                exportModal.style.display = 'none';
+            }
+            if (e.target === jsonImportModal) {
+                jsonImportModal.style.display = 'none';
+            }
+        });
+
+        // --- Zoom Implementation ---
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault(); 
+            hideEditor();
+
+            const rect = canvas.getBoundingClientRect();
+            const mouseScreenX = e.clientX - rect.left;
+            const mouseScreenY = e.clientY - rect.top;
+
+            const worldBefore = screenToWorld(mouseScreenX, mouseScreenY);
+
+            let newScale = scale;
+            if (e.deltaY < 0) {
+                newScale *= CONFIG.ZOOM_FACTOR; 
+            } else {
+                newScale /= CONFIG.ZOOM_FACTOR; 
+            }
+            newScale = Math.max(CONFIG.MIN_SCALE, Math.min(CONFIG.MAX_SCALE, newScale));
+            
+            scale = newScale;
+
+            canvasOffsetX = worldBefore.x - (mouseScreenX / scale);
+            canvasOffsetY = worldBefore.y - (mouseScreenY / scale);
+        }, { passive: false }); // passive: false is required because we call preventDefault()
+
+
+        // --- Initialization and Responsiveness ---
+
+        function resizeCanvas() {
+            const container = document.getElementById('canvas-container');
+            // Set canvas size dynamically based on container width
+            canvas.width = container.clientWidth;
+            // Set a fixed height that accommodates the chart
+            canvas.height = CONFIG.CANVAS_HEIGHT; 
+        }
+
+        window.addEventListener('load', resizeCanvas);
+        window.addEventListener('resize', resizeCanvas);
+
+        window.onload = function() {
+            console.log('=== FLOWCHART APP LOADED ===');
+            console.log('Nodes:', nodes.length);
+            console.log('Connections:', connections.length);
+            resizeCanvas();
+            autoLoad(); // Load saved state if available
+            captureState(); // Capture initial state for undo/redo
+            updateUndoRedoButtons();
+            updateAlignmentButtons(); // Initialize alignment buttons (disabled by default)
+            updateGroupButtons(); // Initialize group buttons (disabled by default)
+            draw();
+            
+            // Show folder selection tip on first load
+            if (isFileSystemAccessSupported() && !localStorage.getItem('folder_tip_shown')) {
+                setTimeout(() => {
+                    messageBox('💡 Tip: Click "Choose Folder" when exporting to select your save location');
+                    localStorage.setItem('folder_tip_shown', 'true');
+                }, 2000);
+            }
+            
+            console.log('=== READY TO USE ===');
+        }
+
+    </script>
+</body>
+</html>
