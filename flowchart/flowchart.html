@@ -276,7 +276,7 @@
 <body>
 
     <div class="header-container">
-        <h1 class="header-title">Interactive Flowchart v1.1</h1>
+        <h1 class="header-title">Interactive Flowchart v1.2</h1>
         <p id="subtitle" class="header-subtitle" data-original-text="Drag blocks to move, use handles to resize, double-click to edit, or drag canvas to pan.">
             Drag blocks to move, use handles to resize, double-click to edit, or drag canvas to pan.
         </p>
@@ -326,6 +326,7 @@
         <button id="addSubprocessBtn" class="control-button process-button" title="Predefined subprocess">⚙️ Subprocess</button>
         <button id="addManualBtn" class="control-button process-button" title="Manual operation">✋ Manual</button>
         <button id="connectModeBtn" class="control-button decision-button" title="Draw connections between blocks">🔗 Connect</button>
+        <button id="toggleArrowStyleBtn" class="control-button process-button" title="Toggle selected connection style (Solid/Dashed)" disabled>🔀 Arrow Style</button>
     </div>
 
     <div id="canvas-container">
@@ -654,6 +655,7 @@
         const addSubprocessBtn = document.getElementById('addSubprocessBtn');
         const addManualBtn = document.getElementById('addManualBtn');
         const connectModeBtn = document.getElementById('connectModeBtn');
+        const toggleArrowStyleBtn = document.getElementById('toggleArrowStyleBtn');
         const undoBtn = document.getElementById('undoBtn');
         const redoBtn = document.getElementById('redoBtn');
         const exportBtn = document.getElementById('exportBtn');
@@ -719,6 +721,11 @@
         let resizeHandle = null;                   // Which handle is being dragged ('nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w')
         let resizeStartNode = null;                // Node state at start of resize
         let resizeStartMouse = { x: 0, y: 0 };     // Mouse position at start of resize
+        
+        // --- Group Resizing State ---
+        let isResizingGroup = false;               // Flag for resizing a group
+        let resizeGroupHandle = null;              // Which handle is being dragged for group
+        let resizeStartGroup = null;               // Group state at start of resize
 
         // --- Canvas Panning State ---
         let isCanvasDragging = false;              // Flag for dragging the whole canvas
@@ -1788,11 +1795,38 @@
             const nodeIds = selectedNodes.map(n => n.id);
             const color = getGroupColor(groupId);
             
+            // Calculate initial bounds from node positions
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            selectedNodes.forEach(node => {
+                const left = node.x - node.w / 2;
+                const right = node.x + node.w / 2;
+                const top = node.y - node.h / 2;
+                const bottom = node.y + node.h / 2;
+                
+                minX = Math.min(minX, left);
+                maxX = Math.max(maxX, right);
+                minY = Math.min(minY, top);
+                maxY = Math.max(maxY, bottom);
+            });
+            
+            const padding = 20;
+            minX -= padding;
+            minY -= padding;
+            maxX += padding;
+            maxY += padding;
+            
             const newGroup = {
                 id: groupId,
                 name: groupName,
                 nodeIds: nodeIds,
-                color: color
+                color: color,
+                // Custom bounds (can be adjusted independently)
+                bounds: {
+                    x: minX,
+                    y: minY,
+                    width: maxX - minX,
+                    height: maxY - minY
+                }
             };
             
             groups.push(newGroup);
@@ -2261,22 +2295,58 @@
                 const geometry = getLabelGeometry(conn, worldLabelFontSize); 
                 if (!geometry) return; 
 
-                const { startPoint, endPoint, midX, midY, textWidth, textHeight } = geometry;
+                const { startPoint, endPoint, midX, midY, textWidth, textHeight, curveOffset, hasReverseConnection } = geometry;
                 
                 // Translate world coordinates to screen coordinates
                 const screenStart = worldToScreen(startPoint.x, startPoint.y);
                 const screenEnd = worldToScreen(endPoint.x, endPoint.y);
                 const screenMid = worldToScreen(midX, midY);
 
-                // Draw the line
+                // Draw the line (curved if bidirectional, straight otherwise)
                 ctx.strokeStyle = lineColor; 
                 ctx.lineWidth = lineWidth;
+                
+                // Set line style (solid or dashed)
+                if (conn.style === 'dashed') {
+                    ctx.setLineDash([10 * scale, 5 * scale]); // Dashed line
+                } else {
+                    ctx.setLineDash([]); // Solid line (default)
+                }
+                
                 ctx.beginPath();
-                ctx.moveTo(screenStart.x, screenStart.y);
-                ctx.lineTo(screenEnd.x, screenEnd.y);
+                if (hasReverseConnection && curveOffset > 0) {
+                    // Draw quadratic curve for bidirectional connections
+                    const controlX = midX;
+                    const controlY = midY;
+                    const screenControl = worldToScreen(controlX, controlY);
+                    
+                    ctx.moveTo(screenStart.x, screenStart.y);
+                    ctx.quadraticCurveTo(screenControl.x, screenControl.y, screenEnd.x, screenEnd.y);
+                } else {
+                    // Draw straight line
+                    ctx.moveTo(screenStart.x, screenStart.y);
+                    ctx.lineTo(screenEnd.x, screenEnd.y);
+                }
                 ctx.stroke();
+                ctx.setLineDash([]); // Reset dash pattern
 
-                drawArrowhead(screenStart.x, screenStart.y, screenEnd.x, screenEnd.y, lineColor);
+                // Calculate arrow direction for curved line
+                let arrowStartX, arrowStartY;
+                if (hasReverseConnection && curveOffset > 0) {
+                    // For curved lines, calculate the tangent at the end point
+                    const controlX = midX;
+                    const controlY = midY;
+                    const screenControl = worldToScreen(controlX, controlY);
+                    
+                    // Tangent direction at t=1 (end point) of quadratic curve
+                    arrowStartX = screenControl.x;
+                    arrowStartY = screenControl.y;
+                } else {
+                    arrowStartX = screenStart.x;
+                    arrowStartY = screenStart.y;
+                }
+                
+                drawArrowhead(arrowStartX, arrowStartY, screenEnd.x, screenEnd.y, lineColor);
 
                 // Draw connection label ONLY if text exists AND we are NOT currently editing this label
                 if (conn.label && conn.label.trim() !== '' && conn !== editingLabel) { 
@@ -2312,26 +2382,41 @@
                 const groupNodes = nodes.filter(n => group.nodeIds.includes(n.id));
                 if (groupNodes.length === 0) return;
                 
-                // Calculate bounding box for group in world coordinates
-                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-                groupNodes.forEach(node => {
-                    const left = node.x - node.w / 2;
-                    const right = node.x + node.w / 2;
-                    const top = node.y - node.h / 2;
-                    const bottom = node.y + node.h / 2;
-                    
-                    minX = Math.min(minX, left);
-                    maxX = Math.max(maxX, right);
-                    minY = Math.min(minY, top);
-                    maxY = Math.max(maxY, bottom);
-                });
+                // Use custom bounds if available, otherwise calculate from nodes
+                let minX, minY, maxX, maxY;
                 
-                // Add padding in world units
-                const padding = 20;
-                minX -= padding;
-                minY -= padding;
-                maxX += padding;
-                maxY += padding;
+                if (group.bounds) {
+                    // Use stored custom bounds
+                    minX = group.bounds.x;
+                    minY = group.bounds.y;
+                    maxX = minX + group.bounds.width;
+                    maxY = minY + group.bounds.height;
+                } else {
+                    // Calculate bounding box for group in world coordinates (legacy support)
+                    minX = Infinity;
+                    minY = Infinity;
+                    maxX = -Infinity;
+                    maxY = -Infinity;
+                    
+                    groupNodes.forEach(node => {
+                        const left = node.x - node.w / 2;
+                        const right = node.x + node.w / 2;
+                        const top = node.y - node.h / 2;
+                        const bottom = node.y + node.h / 2;
+                        
+                        minX = Math.min(minX, left);
+                        maxX = Math.max(maxX, right);
+                        minY = Math.min(minY, top);
+                        maxY = Math.max(maxY, bottom);
+                    });
+                    
+                    // Add padding in world units
+                    const padding = 20;
+                    minX -= padding;
+                    minY -= padding;
+                    maxX += padding;
+                    maxY += padding;
+                }
                 
                 // Convert to screen coordinates
                 const topLeft = worldToScreen(minX, minY);
@@ -2505,6 +2590,11 @@
                 drawResizeHandles(selectedNode);
             }
             
+            // Draw resize handles for selected group
+            if (selectedGroup && selectedNodes.length === 0 && !selectedNode) {
+                drawGroupResizeHandles(selectedGroup);
+            }
+            
             requestAnimationFrame(draw);
         }
 
@@ -2657,6 +2747,182 @@
             node.h = newH;
         }
 
+        /**
+         * Draw resize handles around a selected group
+         */
+        function drawGroupResizeHandles(group) {
+            if (!group.bounds) return;
+            
+            const topLeft = worldToScreen(group.bounds.x, group.bounds.y);
+            const bottomRight = worldToScreen(group.bounds.x + group.bounds.width, group.bounds.y + group.bounds.height);
+            
+            const handleSize = CONFIG.RESIZE_HANDLE_SIZE + 2; // Slightly larger for groups
+            
+            const left = topLeft.x;
+            const right = bottomRight.x;
+            const top = topLeft.y;
+            const bottom = bottomRight.y;
+            const centerX = (left + right) / 2;
+            const centerY = (top + bottom) / 2;
+            
+            // Handle positions
+            const handles = [
+                [left, top],           // nw
+                [right, top],          // ne
+                [left, bottom],        // sw
+                [right, bottom],       // se
+                [centerX, top],        // n
+                [centerX, bottom],     // s
+                [left, centerY],       // w
+                [right, centerY],      // e
+            ];
+            
+            // Draw handles
+            handles.forEach(([x, y]) => {
+                ctx.fillStyle = group.color;
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(x, y, handleSize / 2, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.stroke();
+            });
+        }
+
+        /**
+         * Get which group resize handle is being hovered
+         */
+        function getGroupResizeHandle(group, screenX, screenY) {
+            if (!group || !group.bounds) return null;
+            
+            const topLeft = worldToScreen(group.bounds.x, group.bounds.y);
+            const bottomRight = worldToScreen(group.bounds.x + group.bounds.width, group.bounds.y + group.bounds.height);
+            
+            const handleSize = CONFIG.RESIZE_HANDLE_SIZE + 2;
+            const threshold = handleSize / 2 + 3;
+            
+            const left = topLeft.x;
+            const right = bottomRight.x;
+            const top = topLeft.y;
+            const bottom = bottomRight.y;
+            const centerX = (left + right) / 2;
+            const centerY = (top + bottom) / 2;
+            
+            const handles = {
+                'nw': [left, top],
+                'ne': [right, top],
+                'sw': [left, bottom],
+                'se': [right, bottom],
+                'n': [centerX, top],
+                's': [centerX, bottom],
+                'w': [left, centerY],
+                'e': [right, centerY],
+            };
+            
+            for (const [name, [hx, hy]] of Object.entries(handles)) {
+                const dx = screenX - hx;
+                const dy = screenY - hy;
+                if (Math.sqrt(dx * dx + dy * dy) < threshold) {
+                    return name;
+                }
+            }
+            return null;
+        }
+
+        /**
+         * Resize a group's bounds
+         */
+        function resizeGroupBounds(group, handle, worldMouseX, worldMouseY) {
+            if (!group.bounds) return;
+            
+            const originalX = resizeStartGroup.bounds.x;
+            const originalY = resizeStartGroup.bounds.y;
+            const originalW = resizeStartGroup.bounds.width;
+            const originalH = resizeStartGroup.bounds.height;
+            
+            const deltaX = worldMouseX - resizeStartMouse.x;
+            const deltaY = worldMouseY - resizeStartMouse.y;
+            
+            let newX = originalX;
+            let newY = originalY;
+            let newW = originalW;
+            let newH = originalH;
+            
+            const minSize = 50; // Minimum group size
+            
+            // Apply resize based on handle
+            if (handle.includes('e')) {
+                newW = Math.max(minSize, originalW + deltaX);
+            }
+            if (handle.includes('w')) {
+                const change = Math.min(deltaX, originalW - minSize);
+                newW = originalW - change;
+                newX = originalX + change;
+            }
+            if (handle.includes('s')) {
+                newH = Math.max(minSize, originalH + deltaY);
+            }
+            if (handle.includes('n')) {
+                const change = Math.min(deltaY, originalH - minSize);
+                newH = originalH - change;
+                newY = originalY + change;
+            }
+            
+            // Apply snap to grid if enabled
+            if (snapToGrid) {
+                newW = snapToGridCoord(newW);
+                newH = snapToGridCoord(newH);
+                newX = snapToGridCoord(newX);
+                newY = snapToGridCoord(newY);
+            }
+            
+            group.bounds.x = newX;
+            group.bounds.y = newY;
+            group.bounds.width = newW;
+            group.bounds.height = newH;
+        }
+
+        /**
+         * Toggle arrow style for selected connection
+         */
+        function toggleArrowStyle() {
+            if (!selectedConnection) {
+                messageBox('⚠️ No connection selected');
+                return;
+            }
+            
+            captureState();
+            
+            // Toggle between solid and dashed
+            if (selectedConnection.style === 'dashed') {
+                selectedConnection.style = 'solid';
+                messageBox('✓ Arrow style: Solid');
+            } else {
+                selectedConnection.style = 'dashed';
+                messageBox('✓ Arrow style: Dashed');
+            }
+            
+            captureState();
+        }
+
+        /**
+         * Update arrow style button state
+         */
+        function updateArrowStyleButton() {
+            toggleArrowStyleBtn.disabled = !selectedConnection;
+            toggleArrowStyleBtn.style.opacity = selectedConnection ? '1' : '0.5';
+            
+            // Update button text to show current style
+            if (selectedConnection) {
+                const currentStyle = selectedConnection.style === 'dashed' ? 'Dashed' : 'Solid';
+                toggleArrowStyleBtn.textContent = `🔀 ${currentStyle}`;
+                toggleArrowStyleBtn.title = `Toggle arrow style (Currently: ${currentStyle})`;
+            } else {
+                toggleArrowStyleBtn.textContent = '🔀 Arrow Style';
+                toggleArrowStyleBtn.title = 'Toggle selected connection style (Solid/Dashed)';
+            }
+        }
+
         // --- Deletion Logic ---
 
         function deleteSelected() {
@@ -2720,6 +2986,49 @@
                 }
             } else {
                 messageBox('⚠ Nothing selected. Click on a block or arrow first.');
+            }
+        }
+
+        /**
+         * Toggle the style of the selected connection between solid and dashed
+         */
+        function toggleArrowStyle() {
+            if (!selectedConnection) {
+                messageBox('⚠️ No connection selected. Click on an arrow first.');
+                return;
+            }
+            
+            captureState();
+            
+            // Toggle style
+            if (!selectedConnection.style || selectedConnection.style === 'solid') {
+                selectedConnection.style = 'dashed';
+                messageBox('✓ Arrow style changed to: Dashed');
+            } else {
+                selectedConnection.style = 'solid';
+                messageBox('✓ Arrow style changed to: Solid');
+            }
+            
+            captureState();
+            updateArrowStyleButton();
+        }
+
+        /**
+         * Update the arrow style button state and label
+         */
+        function updateArrowStyleButton() {
+            if (selectedConnection) {
+                toggleArrowStyleBtn.disabled = false;
+                toggleArrowStyleBtn.style.opacity = '1';
+                const currentStyle = selectedConnection.style || 'solid';
+                const newStyle = currentStyle === 'solid' ? 'dashed' : 'solid';
+                toggleArrowStyleBtn.title = `Toggle connection style (Current: ${currentStyle}, Click for: ${newStyle})`;
+                toggleArrowStyleBtn.textContent = currentStyle === 'solid' ? '🔀 Make Dashed' : '🔀 Make Solid';
+            } else {
+                toggleArrowStyleBtn.disabled = true;
+                toggleArrowStyleBtn.style.opacity = '0.5';
+                toggleArrowStyleBtn.title = 'Toggle selected connection style (Solid/Dashed)';
+                toggleArrowStyleBtn.textContent = '🔀 Arrow Style';
             }
         }
 
@@ -2814,6 +3123,7 @@
         
         /**
          * Calculates the geometry needed for a connection label's bounding box in WORLD coordinates.
+         * Also applies curve offset for bidirectional connections.
          */
         function getLabelGeometry(conn, worldFontSize) {
             const fromNode = nodes.find(n => n.id === conn.from);
@@ -2823,11 +3133,33 @@
             const fromCenter = { x: fromNode.x, y: fromNode.y };
             const toCenter = { x: toNode.x, y: toNode.y };
             
+            // Check if there's a reverse connection (bidirectional)
+            const hasReverseConnection = connections.some(c => c.from === conn.to && c.to === conn.from);
+            
             const endPoint = getConnectionPoint(toNode, fromCenter.x, fromCenter.y);
             const startPoint = getConnectionPoint(fromNode, toCenter.x, toCenter.y);
 
-            const midX = (startPoint.x + endPoint.x) / 2;
-            const midY = (startPoint.y + endPoint.y) / 2;
+            let midX = (startPoint.x + endPoint.x) / 2;
+            let midY = (startPoint.y + endPoint.y) / 2;
+            
+            // Apply curve offset for bidirectional connections
+            let curveOffset = 0;
+            if (hasReverseConnection) {
+                // Calculate perpendicular offset
+                const dx = endPoint.x - startPoint.x;
+                const dy = endPoint.y - startPoint.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist > 0) {
+                    // Offset by 20 units perpendicular to the line
+                    curveOffset = 20;
+                    const perpX = -dy / dist;
+                    const perpY = dx / dist;
+                    
+                    midX += perpX * curveOffset;
+                    midY += perpY * curveOffset;
+                }
+            }
 
             // Measure text for accurate hit detection, using the world font size (14px) 
             ctx.font = `${worldFontSize}px Inter`;
@@ -2838,7 +3170,7 @@
             const textHeight = worldFontSize; 
             
             // textWidth and textHeight are measured using the font at 1.0 scale (i.e., world units)
-            return { conn, startPoint, endPoint, midX, midY, textWidth, textHeight: textHeight * 1.2 }; 
+            return { conn, startPoint, endPoint, midX, midY, textWidth, textHeight: textHeight * 1.2, curveOffset, hasReverseConnection }; 
         }
 
         /**
@@ -3129,6 +3461,26 @@
                     return;
                 }
             }
+            
+            // 2b. Check if clicking on a resize handle of the selected group
+            if (selectedGroup && selectedNodes.length === 0 && !selectedNode) {
+                const handle = getGroupResizeHandle(selectedGroup, mouseScreenX, mouseScreenY);
+                if (handle) {
+                    isResizingGroup = true;
+                    resizeGroupHandle = handle;
+                    resizeStartGroup = { 
+                        bounds: {
+                            x: selectedGroup.bounds.x,
+                            y: selectedGroup.bounds.y,
+                            width: selectedGroup.bounds.width,
+                            height: selectedGroup.bounds.height
+                        }
+                    };
+                    resizeStartMouse = { x: worldPos.x, y: worldPos.y };
+                    canvas.style.cursor = getResizeCursor(handle);
+                    return;
+                }
+            }
 
             // 3. Handle Node Drag Mode or Multi-Select
             for (let i = nodes.length - 1; i >= 0; i--) {
@@ -3197,7 +3549,7 @@
             currentMousePos = { x: mouseScreenX, y: mouseScreenY }; 
 
             // Check if we should start canvas dragging (mouse moved while not dragging a node or resizing)
-            if (!isDragging && !isResizing && !isCanvasDragging && !isConnecting && e.buttons === 1) {
+            if (!isDragging && !isResizing && !isResizingGroup && !isCanvasDragging && !isConnecting && e.buttons === 1) {
                 // Mouse is down (buttons === 1) and moved - start canvas drag
                 const dx = Math.abs(mouseScreenX - dragStartX);
                 const dy = Math.abs(mouseScreenY - dragStartY);
@@ -3219,6 +3571,11 @@
                 // Resizing logic
                 const worldPos = screenToWorld(mouseScreenX, mouseScreenY);
                 resizeNode(selectedNode, resizeHandle, worldPos.x, worldPos.y);
+
+            } else if (isResizingGroup && selectedGroup) {
+                // Group resizing logic
+                const worldPos = screenToWorld(mouseScreenX, mouseScreenY);
+                resizeGroupBounds(selectedGroup, resizeGroupHandle, worldPos.x, worldPos.y);
 
             } else if (isDragging && selectedNode) {
                 // Node dragging logic
@@ -3300,6 +3657,15 @@
                     }
                 }
                 
+                // Check for resize handle hover on selected group
+                if (!cursorChanged && selectedGroup && selectedNodes.length === 0 && !selectedNode) {
+                    const handle = getGroupResizeHandle(selectedGroup, mouseScreenX, mouseScreenY);
+                    if (handle) {
+                        canvas.style.cursor = getResizeCursor(handle);
+                        cursorChanged = true;
+                    }
+                }
+                
                 if (!cursorChanged) {
                     // Check for group label hover
                     const groupLabelHit = isPointNearGroupLabel(worldPos.x, worldPos.y);
@@ -3366,7 +3732,7 @@
 
                     if (!exists) {
                         captureState();
-                        const newConnection = { from: connectionStartNode.id, to: targetNode.id, label: '' };
+                        const newConnection = { from: connectionStartNode.id, to: targetNode.id, label: '', style: 'solid' };
                         connections.push(newConnection);
                         captureState();
                         const geometry = getLabelGeometry(newConnection, CONFIG.WORLD_LABEL_FONT_SIZE); 
@@ -3389,8 +3755,13 @@
                 messageBox(`Block resized to ${Math.round(selectedNode.w)}×${Math.round(selectedNode.h)}`);
             }
             
+            if (isResizingGroup && selectedGroup) {
+                captureState();
+                messageBox(`Group frame resized to ${Math.round(selectedGroup.bounds.width)}×${Math.round(selectedGroup.bounds.height)}`);
+            }
+            
             // 2. Selection logic (only if not dragging/resizing a node/canvas)
-            if (!isDragging && !isResizing && !isCanvasDragging) {
+            if (!isDragging && !isResizing && !isResizingGroup && !isCanvasDragging) {
                 // If we clicked, check for node selection
                 let nodeFound = false;
                 for (let i = nodes.length - 1; i >= 0; i--) {
@@ -3400,6 +3771,7 @@
                         if (!e.ctrlKey && !e.metaKey) {
                             selectedNode = node;
                             selectedConnection = null;
+                            updateArrowStyleButton();
                             
                             // Clear multi-selection if not Ctrl-clicking
                             selectedNodes = [];
@@ -3423,6 +3795,7 @@
                         selectedNode = null;
                         selectedNodes = []; // Clear multi-selection
                         updateAlignmentButtons();
+                        updateArrowStyleButton();
                         
                         // Visual feedback
                         messageBox(`Arrow selected: ${selectedConnection.from}→${selectedConnection.to}`);
@@ -3432,6 +3805,7 @@
                         selectedConnection = null;
                         selectedNodes = [];
                         updateAlignmentButtons();
+                        updateArrowStyleButton();
                     }
                 }
             }
@@ -3439,8 +3813,10 @@
             // 3. Reset drag states
             isDragging = false;
             isResizing = false;
+            isResizingGroup = false;
             isCanvasDragging = false;
             resizeHandle = null;
+            resizeGroupHandle = null;
             canvas.style.cursor = isConnecting ? 'crosshair' : 'default';
         });
 
@@ -3522,6 +3898,7 @@
         importBtn.addEventListener('click', () => importFile.click());
         importJsonBtn.addEventListener('click', showJsonImportModal);
         clearBtn.addEventListener('click', clearCanvas);
+        toggleArrowStyleBtn.addEventListener('click', toggleArrowStyle);
         
         // Alignment button listeners
         alignLeftBtn.addEventListener('click', alignLeft);
@@ -3665,6 +4042,7 @@
             updateUndoRedoButtons();
             updateAlignmentButtons(); // Initialize alignment buttons (disabled by default)
             updateGroupButtons(); // Initialize group buttons (disabled by default)
+            updateArrowStyleButton(); // Initialize arrow style button (disabled by default)
             draw();
             
             // Show folder selection tip on first load
