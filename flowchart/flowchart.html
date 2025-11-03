@@ -1945,6 +1945,11 @@
                     node.y += deltaY;
                 }
             });
+            // Update group bounds if custom bounds exist
+            if (group.bounds) {
+                group.bounds.x += deltaX;
+                group.bounds.y += deltaY;
+            }
         }
 
         /**
@@ -2228,7 +2233,7 @@
         }
 
 
-        function getConnectionPoint(node, targetX, targetY) {
+        function getConnectionPoint(node, targetX, targetY, offset = 0) {
             // Calculates connection point in WORLD coordinates
             const dx = targetX - node.x;
             const dy = targetY - node.y;
@@ -2237,8 +2242,9 @@
 
             // Most shapes use rectangular bounding box logic
             if (['process', 'terminator', 'io', 'document', 'subprocess', 'manual', 'database'].includes(node.type)) {
-                const h = node.h / 2;
-                const w = node.w / 2;
+                const h = node.h / 2 + offset;
+                const w = node.w / 2 + offset;
+                // compare the slope of the line to the slope of the box diagonal
                 if (Math.abs(dx * h) > Math.abs(dy * w)) {
                     point.x = node.x + (dx > 0 ? w : -w);
                     point.y = node.y + (dx > 0 ? w * dy / dx : -w * dy / dx);
@@ -2246,6 +2252,7 @@
                     point.y = node.y + (dy > 0 ? h : -h);
                     point.x = node.x + (dy > 0 ? h * dx / dy : -h * dx / dy);
                 }
+                
             } else if (node.type === 'decision') {
                 // Diamond shape connection points
                 const h = node.h / 2;
@@ -2442,7 +2449,7 @@
                 ctx.setLineDash([]); // Reset
                 
                 // Draw group name label
-                const labelFontSize = 14 * scale;
+                const labelFontSize = 18 * scale;
                 ctx.font = `bold ${labelFontSize}px Inter`;
                 ctx.fillStyle = group.color;
                 ctx.textAlign = 'left';
@@ -3136,7 +3143,7 @@
             // Check if there's a reverse connection (bidirectional)
             const hasReverseConnection = connections.some(c => c.from === conn.to && c.to === conn.from);
             
-            const endPoint = getConnectionPoint(toNode, fromCenter.x, fromCenter.y);
+            const endPoint = getConnectionPoint(toNode, fromCenter.x, fromCenter.y, offset=5);
             const startPoint = getConnectionPoint(fromNode, toCenter.x, toCenter.y);
 
             let midX = (startPoint.x + endPoint.x) / 2;
@@ -3152,7 +3159,7 @@
                 
                 if (dist > 0) {
                     // Offset by 20 units perpendicular to the line
-                    curveOffset = 20;
+                    curveOffset = 30;
                     const perpX = -dy / dist;
                     const perpY = dx / dist;
                     
@@ -3384,6 +3391,41 @@
             // Stop keydown events from bubbling up and triggering canvas deletion logic while editing
             e.stopPropagation(); 
         });
+        
+        // Dynamic resizing for connection label textbox
+        nodeEditor.addEventListener('input', () => {
+            // Only auto-resize for connection labels, not nodes
+            if (editingLabel) {
+                const text = nodeEditor.value;
+                
+                // Measure text dimensions using canvas context
+                ctx.save();
+                ctx.font = `${CONFIG.WORLD_LABEL_FONT_SIZE * scale}px Inter`;
+                const metrics = ctx.measureText(text);
+                ctx.restore();
+                
+                // Calculate new dimensions with padding
+                const minWidth = 50; // Minimum width in world units
+                const minHeight = 20; // Minimum height in world units
+                const padding = 20; // Padding in world units
+                
+                // Calculate text width and height
+                let textWidth = metrics.width / scale + padding;
+                textWidth = Math.max(textWidth, minWidth);
+                
+                // Calculate height based on number of lines
+                const lines = text.split('\n').length;
+                let textHeight = lines * CONFIG.WORLD_LABEL_FONT_SIZE * 1.2 + 8;
+                textHeight = Math.max(textHeight, minHeight);
+                
+                // Update editor dimensions in screen coordinates
+                const screenWidth = textWidth * scale;
+                const screenHeight = textHeight * scale;
+                
+                nodeEditor.style.width = `${screenWidth}px`;
+                nodeEditor.style.height = `${screenHeight}px`;
+            }
+        });
 
         // Double-click listener for text editing
         canvas.addEventListener('dblclick', (e) => {
@@ -3602,6 +3644,12 @@
                             node.y += deltaY;
                         }
                     });
+                    
+                    // Move the group bounds as well
+                    if (nodeGroup.bounds) {
+                        nodeGroup.bounds.x += deltaX;
+                        nodeGroup.bounds.y += deltaY;
+                    }
                 } else {
                     // Move all other selected nodes together (multi-select mode)
                     if (selectedNodes.length > 0) {
@@ -3633,6 +3681,12 @@
                                 node.y += snapDeltaY;
                             }
                         });
+                        
+                        // Move the group bounds with snap delta
+                        if (nodeGroup.bounds) {
+                            nodeGroup.bounds.x += snapDeltaX;
+                            nodeGroup.bounds.y += snapDeltaY;
+                        }
                     } else if (selectedNodes.length > 0) {
                         selectedNodes.forEach(node => {
                             if (node !== selectedNode) {
