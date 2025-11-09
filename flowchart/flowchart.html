@@ -276,7 +276,7 @@
 <body>
 
     <div class="header-container">
-        <h1 class="header-title">Interactive Flowchart v1.3</h1>
+        <h1 class="header-title">Interactive Flowchart v1.4</h1>
         <p id="subtitle" class="header-subtitle" data-original-text="Drag blocks to move, use handles to resize, double-click to edit, or drag canvas to pan.">
             Drag blocks to move, use handles to resize, double-click to edit, or drag canvas to pan.
         </p>
@@ -287,6 +287,7 @@
         <button id="undoBtn" class="toolbar-button toolbar-primary">↶ Undo</button>
         <button id="redoBtn" class="toolbar-button toolbar-primary">↷ Redo</button>
         <button id="exportBtn" class="toolbar-button toolbar-primary">💾 Export</button>
+        <button id="savePngBtn" class="toolbar-button toolbar-primary" title="Save as PNG image (Ctrl+Shift+P)">🖼️ Save PNG</button>
         <button id="importBtn" class="toolbar-button toolbar-primary">📂 Import</button>
         <button id="importJsonBtn" class="toolbar-button toolbar-primary" title="Import from JSON text">📋 Import JSON</button>
         <button id="clearBtn" class="toolbar-button toolbar-danger">🗑️ Clear Canvas</button>
@@ -382,8 +383,12 @@
                     <span class="shortcut-key">Ctrl+Y / Ctrl+Shift+Z</span>
                 </li>
                 <li class="shortcut-item">
-                    <span>Save (export)</span>
+                    <span>Save (export JSON)</span>
                     <span class="shortcut-key">Ctrl+S</span>
+                </li>
+                <li class="shortcut-item">
+                    <span>Save PNG image</span>
+                    <span class="shortcut-key">Ctrl+Shift+P</span>
                 </li>
                 <li class="shortcut-item">
                     <span>Toggle snap to grid</span>
@@ -659,6 +664,7 @@
         const undoBtn = document.getElementById('undoBtn');
         const redoBtn = document.getElementById('redoBtn');
         const exportBtn = document.getElementById('exportBtn');
+        const savePngBtn = document.getElementById('savePngBtn');
         const importBtn = document.getElementById('importBtn');
         const clearBtn = document.getElementById('clearBtn');
         const alignLeftBtn = document.getElementById('alignLeftBtn');
@@ -1164,6 +1170,363 @@
             } else {
                 exportToDownloads(filename, exportData);
             }
+        }
+
+        /**
+         * Export the flowchart as a PNG image.
+         * Captures the entire flowchart with proper bounds and padding.
+         */
+        function exportAsPNG() {
+            if (nodes.length === 0) {
+                messageBox('⚠️ No blocks to export');
+                return;
+            }
+
+            // Calculate bounding box including connections labels
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            
+            // Include nodes in bounds
+            nodes.forEach(node => {
+                const left = node.x - node.w / 2;
+                const right = node.x + node.w / 2;
+                const top = node.y - node.h / 2;
+                const bottom = node.y + node.h / 2;
+                
+                minX = Math.min(minX, left);
+                maxX = Math.max(maxX, right);
+                minY = Math.min(minY, top);
+                maxY = Math.max(maxY, bottom);
+            });
+
+            // Include groups in bounds (if they extend beyond nodes)
+            groups.forEach(group => {
+                if (group.bounds) {
+                    minX = Math.min(minX, group.bounds.x);
+                    minY = Math.min(minY, group.bounds.y);
+                    maxX = Math.max(maxX, group.bounds.x + group.bounds.width);
+                    maxY = Math.max(maxY, group.bounds.y + group.bounds.height);
+                }
+            });
+
+            // Add padding around the content
+            const padding = 50;
+            minX -= padding;
+            minY -= padding;
+            maxX += padding;
+            maxY += padding;
+
+            const contentWidth = maxX - minX;
+            const contentHeight = maxY - minY;
+
+            // Create a temporary canvas for export
+            const exportCanvas = document.createElement('canvas');
+            const exportCtx = exportCanvas.getContext('2d');
+
+            // Set export canvas size with higher resolution for better quality
+            const exportScale = 2.0;
+            exportCanvas.width = contentWidth * exportScale;
+            exportCanvas.height = contentHeight * exportScale;
+
+            // Fill white background
+            exportCtx.fillStyle = 'white';
+            exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+
+            // Set up transformation for export
+            exportCtx.save();
+            exportCtx.scale(exportScale, exportScale);
+            exportCtx.translate(-minX, -minY);
+
+            // Helper function to draw rounded rectangle
+            function exportRoundRect(ctx, x, y, w, h, r) {
+                if (w < 2 * r) r = w / 2;
+                if (h < 2 * r) r = h / 2;
+                ctx.beginPath();
+                ctx.moveTo(x + r, y);
+                ctx.arcTo(x + w, y, x + w, y + h, r);
+                ctx.arcTo(x + w, y + h, x, y + h, r);
+                ctx.arcTo(x, y + h, x, y, r);
+                ctx.arcTo(x, y, x + w, y, r);
+                ctx.closePath();
+            }
+
+            // Draw groups first
+            groups.forEach(group => {
+                if (group.nodeIds.length === 0) return;
+                
+                const groupNodes = nodes.filter(n => group.nodeIds.includes(n.id));
+                if (groupNodes.length === 0) return;
+                
+                // Use custom bounds if available
+                let bounds;
+                if (group.bounds) {
+                    bounds = {
+                        x: group.bounds.x,
+                        y: group.bounds.y,
+                        width: group.bounds.width,
+                        height: group.bounds.height
+                    };
+                } else {
+                    // Calculate from nodes
+                    let minGX = Infinity, minGY = Infinity, maxGX = -Infinity, maxGY = -Infinity;
+                    groupNodes.forEach(node => {
+                        const left = node.x - node.w / 2;
+                        const right = node.x + node.w / 2;
+                        const top = node.y - node.h / 2;
+                        const bottom = node.y + node.h / 2;
+                        minGX = Math.min(minGX, left);
+                        maxGX = Math.max(maxGX, right);
+                        minGY = Math.min(minGY, top);
+                        maxGY = Math.max(maxGY, bottom);
+                    });
+                    const groupPadding = 20;
+                    bounds = {
+                        x: minGX - groupPadding,
+                        y: minGY - groupPadding,
+                        width: (maxGX - minGX) + groupPadding * 2,
+                        height: (maxGY - minGY) + groupPadding * 2
+                    };
+                }
+                
+                // Draw group background
+                exportCtx.fillStyle = group.color + '20';
+                exportCtx.strokeStyle = group.color;
+                exportCtx.lineWidth = 2;
+                exportRoundRect(exportCtx, bounds.x, bounds.y, bounds.width, bounds.height, 10);
+                exportCtx.fill();
+                exportCtx.stroke();
+                
+                // Draw group label
+                const labelFontSize = 18;
+                exportCtx.font = `bold ${labelFontSize}px Inter`;
+                exportCtx.fillStyle = group.color;
+                exportCtx.textAlign = 'left';
+                exportCtx.textBaseline = 'top';
+                exportCtx.fillText(group.name, bounds.x + 5, bounds.y + 5);
+            });
+
+            // Draw connections
+            exportCtx.lineWidth = CONFIG.LINE_WIDTH;
+            connections.forEach(conn => {
+                const fromNode = nodes.find(n => n.id === conn.from);
+                const toNode = nodes.find(n => n.id === conn.to);
+                if (!fromNode || !toNode) return;
+
+                // Check for reverse connection (bidirectional)
+                const hasReverseConnection = connections.some(c => 
+                    c.from === conn.to && c.to === conn.from
+                );
+
+                // Calculate connection points
+                const startPoint = getConnectionPoint(fromNode, toNode.x, toNode.y);
+                const endPoint = getConnectionPoint(toNode, fromNode.x, fromNode.y);
+
+                const dx = endPoint.x - startPoint.x;
+                const dy = endPoint.y - startPoint.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                let midX = (startPoint.x + endPoint.x) / 2;
+                let midY = (startPoint.y + endPoint.y) / 2;
+
+                // Apply curve offset for bidirectional connections
+                let curveOffset = 0;
+                if (hasReverseConnection && dist > 0) {
+                    curveOffset = 20;
+                    const perpX = -dy / dist;
+                    const perpY = dx / dist;
+                    midX += perpX * curveOffset;
+                    midY += perpY * curveOffset;
+                }
+
+                // Set line style
+                exportCtx.strokeStyle = '#00338D';
+                if (conn.style === 'dashed') {
+                    exportCtx.setLineDash([8, 4]);
+                } else {
+                    exportCtx.setLineDash([]);
+                }
+
+                // Draw line
+                exportCtx.beginPath();
+                exportCtx.moveTo(startPoint.x, startPoint.y);
+                if (hasReverseConnection && curveOffset > 0) {
+                    exportCtx.quadraticCurveTo(midX, midY, endPoint.x, endPoint.y);
+                } else {
+                    exportCtx.lineTo(endPoint.x, endPoint.y);
+                }
+                exportCtx.stroke();
+                exportCtx.setLineDash([]);
+
+                // Draw arrowhead
+                const angle = Math.atan2(endPoint.y - midY, endPoint.x - midX);
+                const headlen = CONFIG.ARROWHEAD_SIZE;
+                exportCtx.beginPath();
+                exportCtx.moveTo(endPoint.x, endPoint.y);
+                exportCtx.lineTo(
+                    endPoint.x - headlen * Math.cos(angle - Math.PI / 6),
+                    endPoint.y - headlen * Math.sin(angle - Math.PI / 6)
+                );
+                exportCtx.lineTo(
+                    endPoint.x - headlen * Math.cos(angle + Math.PI / 6),
+                    endPoint.y - headlen * Math.sin(angle + Math.PI / 6)
+                );
+                exportCtx.closePath();
+                exportCtx.fillStyle = '#00338D';
+                exportCtx.fill();
+
+                // Draw label if exists
+                if (conn.label) {
+                    exportCtx.font = `${CONFIG.WORLD_LABEL_FONT_SIZE}px Inter`;
+                    const metrics = exportCtx.measureText(conn.label);
+                    const textWidth = metrics.width;
+                    const textHeight = CONFIG.WORLD_LABEL_FONT_SIZE;
+                    
+                    exportCtx.fillStyle = 'white';
+                    exportCtx.fillRect(midX - textWidth / 2 - 4, midY - textHeight / 2 - 2, textWidth + 8, textHeight + 4);
+                    exportCtx.fillStyle = '#00338D';
+                    exportCtx.textAlign = 'center';
+                    exportCtx.textBaseline = 'middle';
+                    exportCtx.fillText(conn.label, midX, midY);
+                }
+            });
+
+            // Draw nodes
+            nodes.forEach(node => {
+                const x = node.x - node.w / 2;
+                const y = node.y - node.h / 2;
+                const w = node.w;
+                const h = node.h;
+
+                // Use KPMG color scheme
+                exportCtx.fillStyle = '#ACEAFF'; // Light Blue
+                exportCtx.strokeStyle = '#00338D'; // KPMG Blue
+                exportCtx.lineWidth = 2;
+
+                // Draw shape based on type
+                if (node.type === 'process') {
+                    exportRoundRect(exportCtx, x, y, w, h, 10);
+                    exportCtx.fill();
+                    exportCtx.stroke();
+                } else if (node.type === 'decision') {
+                    exportCtx.beginPath();
+                    exportCtx.moveTo(node.x, y);
+                    exportCtx.lineTo(node.x + w / 2, node.y);
+                    exportCtx.lineTo(node.x, y + h);
+                    exportCtx.lineTo(node.x - w / 2, node.y);
+                    exportCtx.closePath();
+                    exportCtx.fill();
+                    exportCtx.stroke();
+                } else if (node.type === 'terminator') {
+                    const radius = Math.min(h / 2, 20);
+                    exportRoundRect(exportCtx, x, y, w, h, radius);
+                    exportCtx.fill();
+                    exportCtx.stroke();
+                } else if (node.type === 'io') {
+                    const skew = h * 0.2;
+                    exportCtx.beginPath();
+                    exportCtx.moveTo(x + skew, y);
+                    exportCtx.lineTo(x + w, y);
+                    exportCtx.lineTo(x + w - skew, y + h);
+                    exportCtx.lineTo(x, y + h);
+                    exportCtx.closePath();
+                    exportCtx.fill();
+                    exportCtx.stroke();
+                } else if (node.type === 'document') {
+                    const waveHeight = h * 0.1;
+                    exportCtx.beginPath();
+                    exportCtx.moveTo(x, y);
+                    exportCtx.lineTo(x + w, y);
+                    exportCtx.lineTo(x + w, y + h - waveHeight);
+                    exportCtx.bezierCurveTo(
+                        x + w * 0.75, y + h - waveHeight * 2,
+                        x + w * 0.5, y + h,
+                        x + w * 0.25, y + h - waveHeight
+                    );
+                    exportCtx.bezierCurveTo(
+                        x + w * 0.125, y + h - waveHeight * 1.5,
+                        x, y + h,
+                        x, y + h - waveHeight
+                    );
+                    exportCtx.lineTo(x, y);
+                    exportCtx.closePath();
+                    exportCtx.fill();
+                    exportCtx.stroke();
+                } else if (node.type === 'database') {
+                    const ellipseHeight = h * 0.15;
+                    // Draw body
+                    exportCtx.beginPath();
+                    exportCtx.moveTo(x, y + ellipseHeight);
+                    exportCtx.lineTo(x, y + h - ellipseHeight);
+                    exportCtx.lineTo(x + w, y + h - ellipseHeight);
+                    exportCtx.lineTo(x + w, y + ellipseHeight);
+                    exportCtx.closePath();
+                    exportCtx.fill();
+                    // Draw side lines
+                    exportCtx.beginPath();
+                    exportCtx.moveTo(x, y + ellipseHeight);
+                    exportCtx.lineTo(x, y + h - ellipseHeight);
+                    exportCtx.stroke();
+                    exportCtx.beginPath();
+                    exportCtx.moveTo(x + w, y + ellipseHeight);
+                    exportCtx.lineTo(x + w, y + h - ellipseHeight);
+                    exportCtx.stroke();
+                    // Draw bottom ellipse
+                    exportCtx.beginPath();
+                    exportCtx.ellipse(x + w / 2, y + h - ellipseHeight, w / 2, ellipseHeight, 0, 0, Math.PI);
+                    exportCtx.stroke();
+                    // Draw top ellipse
+                    exportCtx.beginPath();
+                    exportCtx.ellipse(x + w / 2, y + ellipseHeight, w / 2, ellipseHeight, 0, 0, Math.PI * 2);
+                    exportCtx.fill();
+                    exportCtx.stroke();
+                } else if (node.type === 'subprocess') {
+                    exportRoundRect(exportCtx, x, y, w, h, 5);
+                    exportCtx.fill();
+                    exportCtx.stroke();
+                    const inset = 8;
+                    exportCtx.beginPath();
+                    exportCtx.moveTo(x + inset, y);
+                    exportCtx.lineTo(x + inset, y + h);
+                    exportCtx.moveTo(x + w - inset, y);
+                    exportCtx.lineTo(x + w - inset, y + h);
+                    exportCtx.stroke();
+                } else if (node.type === 'manual') {
+                    const topInset = h * 0.25;
+                    exportCtx.beginPath();
+                    exportCtx.moveTo(x + topInset, y);
+                    exportCtx.lineTo(x + w - topInset, y);
+                    exportCtx.lineTo(x + w, y + h);
+                    exportCtx.lineTo(x, y + h);
+                    exportCtx.closePath();
+                    exportCtx.fill();
+                    exportCtx.stroke();
+                }
+
+                // Draw text
+                exportCtx.fillStyle = '#0C233C';
+                exportCtx.font = `${CONFIG.WORLD_MAX_NODE_FONT_SIZE}px Inter`;
+                exportCtx.textAlign = 'center';
+                exportCtx.textBaseline = 'middle';
+                exportCtx.fillText(node.text, node.x, node.y);
+            });
+
+            exportCtx.restore();
+
+            // Convert canvas to blob and download
+            exportCanvas.toBlob((blob) => {
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+                const filename = `flowchart_${timestamp}.png`;
+                
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                messageBox(`✓ PNG exported as ${filename}`);
+            }, 'image/png');
         }
 
         /**
@@ -3069,6 +3432,12 @@
                 showExportModal();
             }
             
+            // Export PNG shortcut
+            if (e.ctrlKey && e.shiftKey && e.key === 'P' && !isEditingText) {
+                e.preventDefault();
+                exportAsPNG();
+            }
+            
             // Snap to grid toggle
             if (e.key === 'g' && !isEditingText) {
                 toggleSnapToGrid();
@@ -3949,6 +4318,7 @@
         undoBtn.addEventListener('click', undo);
         redoBtn.addEventListener('click', redo);
         exportBtn.addEventListener('click', showExportModal);
+        savePngBtn.addEventListener('click', exportAsPNG);
         importBtn.addEventListener('click', () => importFile.click());
         importJsonBtn.addEventListener('click', showJsonImportModal);
         clearBtn.addEventListener('click', clearCanvas);
